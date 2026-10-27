@@ -1,0 +1,71 @@
+<!DOCTYPE html><html lang="en"><head><title>Duel</title><%- include('partials/head') %></head>
+<body><div class="page">
+<%- include('partials/nav', { page }) %>
+<h1 class="title">Duel</h1>
+<p class="sub">Choose your deck, then find an opponent. Open this page in a second tab to duel yourself.</p>
+<div class="vs-wrap">
+  <div class="vs-col"><h2>YOUR DECK</h2><div class="pick-grid" id="mine"></div><div class="panel selected-bar" id="mineBar"></div></div>
+  <div class="vs-badge">VS</div>
+  <div class="vs-col opp"><h2>OPPONENT</h2>
+    <div class="pick-grid" id="theirs"><div class="deck-case sel opp" id="oppCase" style="grid-column:span 2"><div class="art" style="background:url(/images/card-back.jpg) center/contain no-repeat,radial-gradient(circle at 50% 40%,#2f7fd6,#07142c)"></div><div class="meta"><b id="oppT">No opponent yet</b><small id="oppS">Press Find Opponent, then start the same page in another tab.</small></div></div></div>
+    <div class="panel selected-bar" id="theirBar"><span class="who">OPP</span><span id="oppBar">Waiting for you to search</span></div></div>
+</div>
+<div class="setup-footer">
+  <div><div class="sub" style="margin:0 0 6px;font-size:12px">YOUR DUELIST</div>
+    <button class="avatar-btn" id="bAvatar"><span class="av-mini" id="avImg"></span><span id="avName">Auto</span></button></div>
+  <div style="flex:1"></div>
+  <span class="warn" id="warn"></span>
+  <button class="btn gold" id="go">Find Opponent</button>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let myAvatar = '', myFrame = '', decks = [], mine = null, searching = false, timer = null;
+const params = new URLSearchParams(location.search);
+function caseEl(d) {
+  const el = document.createElement('div'); el.className = caseClass(d) + (mine === d.id ? ' sel' : '');
+  el.innerHTML = deckCaseHTML(d); el.onclick = () => { if (searching) return; mine = d.id; paint(); }; return el;
+}
+function bar(el, id, label) {
+  const d = decks.find(x => x.id === id);
+  el.innerHTML = '<span class="who">' + label + '</span>' + (d ? '<span>' + esc(d.name) + ' — ' + d.counts.main + ' cards' + (d.script ? ' · ' + d.script.pct + '% scripted' : '') + '</span>' : '<span>Nothing selected</span>');
+}
+function paint() {
+  const m = $('mine'); m.innerHTML = ''; decks.forEach(d => m.appendChild(caseEl(d)));
+  if (window.paintAv && decks.length) paintAv(); bar($('mineBar'), mine, 'YOU');
+  const d = decks.find(x => x.id === mine); const warns = [];
+  if (d && d.counts.main < 40) warns.push('Your deck has fewer than 40 cards.');
+  if (d && d.script && d.script.pct < 50) warns.push('Many cards in this deck have no script, so they play as plain cards.');
+  $('warn').textContent = warns.join(' '); $('go').disabled = !mine;
+}
+function setSearching(on) {
+  searching = on; $('go').textContent = on ? 'Cancel Search' : 'Find Opponent'; $('go').disabled = !mine;
+  $('oppT').textContent = on ? 'Searching…' : 'No opponent yet'; $('oppS').textContent = on ? 'Waiting for another player to press Find Opponent.' : 'Press Find Opponent, then start the same page in another tab.';
+  $('oppBar').textContent = on ? 'Searching for an opponent…' : 'Waiting for you to search'; $('oppCase').classList.toggle('searching', on);
+  clearInterval(timer); if (on) timer = setInterval(poll, 700);
+}
+async function poll() { try { const j = await api('/api/duel/lobby'); if (j.status === 'started') { clearInterval(timer); location.href = '/duel/play'; } else if (j.status === 'idle') setSearching(false); } catch (e) { /* keep polling */ } }
+$('go').onclick = async () => {
+  if (searching) { await api('/api/duel/leave', { method: 'POST' }); setSearching(false); return; }
+  $('go').disabled = true;
+  try {
+    localStorage.setItem('ygo.mine', mine); localStorage.setItem('ygo.avatar', myAvatar); localStorage.setItem('ygo.frame', myFrame);
+    const j = await api('/api/duel/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ playerDeck: mine, playerAvatar: myAvatar, playerFrame: myFrame }) });
+    if (j.status === 'started') location.href = '/duel/play'; else setSearching(true);
+  } catch (e) { toast(e.message, true); $('go').disabled = false; }
+};
+(async () => {
+  decks = (await api('/api/decks')).decks.filter(d => !d.broken);
+  const ls = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const pick = id => decks.find(d => d.id === id) ? id : null;
+  mine = pick(params.get('deck')) || pick(ls('ygo.mine')) || (decks[0] && decks[0].id);
+  try { myAvatar = localStorage.getItem('ygo.avatar') || ''; myFrame = localStorage.getItem('ygo.frame') || ''; } catch (e) { /* ignore */ }
+  paintAv(); paint(); poll();
+})();
+function paintAv() {
+  const d = decks.find(x => x.id === mine);
+  $('avImg').innerHTML = avatarHTML(myAvatar || (d && d.portrait) || '/images/avatar/Kuriboh-DAR.png', myFrame || (d && d.frame) || DEFAULT_FRAME, 'You');
+  $('avName').textContent = myAvatar ? decodeURIComponent(myAvatar.split('/').pop()).replace(/-DAR.*$/, '') : 'Deck default';
+}
+$('bAvatar').onclick = async () => { if (searching) return; const v = await pickAvatar({ avatar: myAvatar, frame: myFrame }); if (v === null) return; myAvatar = v.avatar; myFrame = v.frame; paintAv(); };
+</script>
+</div></body></html>

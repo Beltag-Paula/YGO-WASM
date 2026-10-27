@@ -1,0 +1,23 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;600;700;800&display=swap" rel="stylesheet">
+<script>
+  (function () { try { document.documentElement.dataset.theme = localStorage.getItem('ygo.theme') || 'blue'; } catch (e) { document.documentElement.dataset.theme = 'blue'; } })();
+  window.THEMES = ['blue', 'red', 'yellow', 'purple'];
+  window.setTheme = function (t) {
+    if (!window.THEMES.includes(t)) t = 'blue';
+    document.documentElement.dataset.theme = t;
+    try { localStorage.setItem('ygo.theme', t); } catch (e) { /* private mode */ }
+    document.querySelectorAll('.theme-swatches button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+    window.dispatchEvent(new CustomEvent('themechange', { detail: t }));
+  };
+</script>
+<script>
+  // every browser TAB is its own player, so two tabs of one browser can duel each other
+  (function () { try { window.TAB = sessionStorage.getItem('ygo.tab'); if (!window.TAB) { window.TAB = Math.random().toString(36).slice(2) + Date.now().toString(36); sessionStorage.setItem('ygo.tab', window.TAB); } } catch (e) { window.TAB = 'anon'; }
+    const f = window.fetch.bind(window); window.fetch = function (u, o) { o = o || {}; if (typeof u === 'string' && u.startsWith('/api')) o = Object.assign({}, o, { headers: Object.assign({}, o.headers || {}, { 'x-tab': window.TAB }) }); return f(u, o); }; })();
+</script>
+<script src="/static/js/frames.js"></script>
+<link rel="stylesheet" href="/static/css/md.css">
