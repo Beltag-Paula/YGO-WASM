@@ -72,8 +72,11 @@ export class Match {
   // choose answers for engine prompts that the client's flow already answered (tributes, attack target, picked cards) or that need no human input
   _auto(P) { const a = this.auto;
     if (P.kind === 'CHAIN' && !P.chains.length && !P.forced) return i32(-1); // nothing to chain: the engine asks anyway, a player should never see it
-    if (P.kind === 'PLACE' || P.kind === 'DISFIELD') { const own = P.player; for (let pl = 0; pl < 2; pl++) for (const [loc, base] of [[4, 0], [8, 8]]) for (let q = 0; q < 7; q++) if (!(P.flag & (1 << (16 * pl + base + q)))) return Buffer.from([pl === 0 ? own : 1 - own, loc, q]);
-      return null; }
+    if (P.kind === 'PLACE' || P.kind === 'DISFIELD') {
+      const free = []; const own = P.player;
+      for (let pl = 0; pl < 2; pl++) for (const [loc, base] of [[4, 0], [8, 8]]) for (let q = 0; q < 7; q++) if (!(P.flag & (1 << (16 * pl + base + q)))) free.push([pl, loc, q]);
+      if (free.length !== 1) return null; // more than one legal zone: the player picks the zone (Master Rule 5: Extra Monster Zone usable for synchro/fusion/xyz/link)
+      return Buffer.from([free[0][0] === 0 ? own : 1 - own, free[0][1], free[0][2]]); }
     if (!a || a.seat !== P.player) return null;
     const idxOfUid = u => { const e = this._entByUid(P.player, u); if (!e) return -1; return (P.cards || []).findIndex(c => c.con === e.con && c.loc === e.loc && c.seq === e.seq); };
     if (P.kind === 'TRIBUTE' && a.tributes) { const sel = []; for (const z of a.tributes) { const i = P.cards.findIndex(c => c.con === P.player && c.loc === LOC.MZ && c.seq === z); if (i >= 0 && !sel.includes(i)) sel.push(i); }
@@ -82,8 +85,7 @@ export class Match {
     if (P.kind === 'CARD' && a.target) { const i = idxOfUid(a.target); a.target = null; if (i >= 0) return encode(P, { sel: [i] }); }
     if ((P.kind === 'CARD') && a.picks) { const sel = a.picks.map(idxOfUid).filter(i => i >= 0); a.picks = null; return encode(P, { sel }); }
     if (P.kind === 'UNSELECT' && a.picks) { while (a.picks.length) { const u = a.picks.shift(); const i = P.cards.findIndex(c => { const e = this._entByUid(P.player, u); return e && c.con === e.con && c.loc === e.loc && c.seq === e.seq; }); if (i >= 0) return encode(P, { idx: i }); }
-      a.picks = null; if (P.finish) return encode(P, { finish: true }); }
-    return null; }
+      a.picks = null; if (P.finish) return encode(P, { finish: true }); }    return null; }
 
   // ---------------------------------------------------------------- snapshots and card identity
   _snap() { const out = [];
@@ -243,6 +245,7 @@ export class Match {
       const uids = p.uids || [], idxOf = u => { const e = ent.find(x => x.uid === u); const i = e ? P.cards.findIndex(c => c.con === e.con && c.loc === e.loc && c.seq === e.seq) : -1; return i >= 0 ? i : (String(u).startsWith('p') ? Number(String(u).slice(1)) : -1); };
       if (type === 'cancelChoice') { if (P.kind === 'UNSELECT') return respond(encode(P, { finish: true })); return respond(encode(P, { cancel: true })); }
       if (P.kind === 'CARD' || P.kind === 'TRIBUTE') { const sel = uids.map(idxOf).filter(i => i >= 0); return respond(encode(P, { sel })); }
-      if (P.kind === 'UNSELECT') { if (!uids.length) return respond(encode(P, { finish: true })); return respond(encode(P, { idx: Math.max(0, idxOf(uids[0])) }), { picks: uids.slice(1) }); } }
+      if (P.kind === 'UNSELECT') { if (!uids.length) { if (!(P.finish || P.cancel)) return bad('Select ' + (P.min || 1) + ' card(s) to continue (or Skip when the prompt allows it).'); return respond(encode(P, { finish: true })); }
+        const idx = idxOf(uids[0]); if (idx < 0) return bad("That card isn't part of this selection prompt — pick one of the highlighted cards."); return respond(encode(P, { idx }), { picks: uids.slice(1) }); } }
     return bad('That action is not available right now.'); }
 }

@@ -53,6 +53,8 @@ app.get('/api/duel/state', (req, res) => { const m = getMatch(req); if (!m) retu
 app.post('/api/duel/act', async (req, res) => { const m = getMatch(req); if (!m) return res.status(404).json({ error: 'No duel in progress' }); const { type, ...payload } = req.body || {};
   try { res.json(await m.match.act(m.seat, String(type || ''), payload)); } catch (e) { console.error(e); res.status(500).json({ error: e.message }); } });
 // free the engine memory once a finished duel has sat around for a while
+const pendingShape = m => { const P = m.pending; return P ? { kind: P.kind, player: P.player, retry: !!P.retry, min: P.min, max: P.max, cancel: !!P.cancel, finish: !!P.finish, cards: (P.cards || []).map(c => c.name + '@' + ['?', 'deck', 'hand', 'MZ', 'ST', 'GY', 'banish', 'extra'][c.loc] || c.loc).slice(0, 10), picked: (P.picked || []).map(c => c.name).slice(0, 6) } : null; };
+app.get('/api/debug/duels', (req, res) => { const out = []; for (const [tab, m] of inMatch) out.push({ tab, seat: m.seat, turn: m.match.turn, phase: m.match.phase, over: m.match.over, locked: !!m.match.pending, pending: pendingShape(m.match), promptFor: m.match.pending ? m.match.pending.kind === 'IDLECMD' ? 'idle (board actions)' : 'prompt/response' : 'none' }); res.json(out); });
 setInterval(() => { for (const [tab, m] of inMatch) if (m.match.over && Date.now() - (m.match.endedAt || (m.match.endedAt = Date.now())) > 600000) { inMatch.delete(tab); } }, 60000);
 
 app.use((err, req, res, next) => { console.error(err); res.status(500).json(req.path.startsWith('/api') ? { error: err.message } : undefined); });

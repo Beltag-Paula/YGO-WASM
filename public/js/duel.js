@@ -61,7 +61,7 @@
 
   async function send(type, payload) {
     if (S.locked) return;
-    S.locked = true; clearUI();
+    S.locked = true; clearUI(); hideHint(); await hidePromptBox();
     try { await handle(await post(type, payload)); await pump(); }
     catch (e) { console.error(e); toast('Connection problem: ' + e.message, true); }
     S.locked = false; refreshUI();
@@ -122,13 +122,26 @@
           h.onclick = () => openPile(side, k); host.appendChild(h);
         }
       }
-      const b = document.createElement('div'), p = pilePos(side, 'gy');
-      b.className = 'pile-count'; b.id = `cnt-${side}-ban`; b.style.cssText += `left:${p.x + 2}px;top:${p.y + 2}px;background:rgba(70,20,40,.92);border-color:#ff8a9a;display:none`; b.title = 'Banished'; host.appendChild(b);
+      const p = pilePos(side, 'gy'),
+        b = document.createElement('div');
+      // banish pill sits OUTBOARD of the graveyard pile (right of yours, left of theirs) so it never covers the deck pile
+      b.className = 'pile-count'; b.id = `cnt-${side}-ban`; b.style.cssText += `left:${side === 'you' ? p.x + CW + 10 : p.x - 104}px;top:${p.y}px;width:auto;background:rgba(70,20,40,.93);border-color:#ff8a9a;cursor:pointer;white-space:nowrap`; b.title = 'Banished Zone'; b.textContent = 'BANISH 0'; host.appendChild(b);
     }
     if (MODERN) for (let i = 0; i < 2; i++) {
       const p = emzPos(i), d = document.createElement('div');
       d.className = 'slot emz'; d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.style.transform = `scale(${FS})`; host.appendChild(d);
+      d.onclick = () => onSlotClick('you', 'mon', 5 + i); // the two Extra Monster Zones (my seq 5 / 6)
       const l = document.createElement('div'); l.className = 'pile-label'; l.style.left = p.x + 'px'; l.style.top = (p.y + CH / 2 + 24 * FS) + 'px'; l.textContent = 'EXTRA MONSTER'; host.appendChild(l);
+    }
+    if (MODERN) {
+      // pendulum zone mounts at the far ends of both spell/trap rows (visual mat tiles; P-zone seq 6/7 wiring comes with a pendulum deck)
+      const pend = (side) => {
+        for (const [i2, huec] of [[0, 'rgba(124, 242, 255, .8)'], [4, 'rgba(255, 90, 130, .8)']]) {
+          const p2 = zonePos(side, 'st', i2), d2 = document.createElement('div');
+          d2.className = 'slot st pend'; d2.dataset.pc = huec; d2.style.left = (p2.x - 86) + 'px'; d2.style.top = p2.y + 'px'; d2.style.transform = `scale(${FS})`; d2.style.setProperty('--pc', huec); d2.dataset.pc = huec; host.appendChild(d2);
+        }
+      };
+      pend('you'); pend('opp');
     }
   }
 
@@ -243,7 +256,7 @@
         const el = $(`cnt-${side}-${k}`); if (el.textContent !== String(n)) { el.textContent = n; el.classList.add('bump'); setTimeout(() => el.classList.remove('bump'), 300); }
         const pile = $(`pile-${side}-${k}`); if (k !== 'gy') pile.classList.toggle('empty', n === 0);
       }
-      const b = $(`cnt-${side}-ban`); b.style.display = c.banished ? 'grid' : 'none'; b.textContent = 'B' + c.banished;
+      const b = $(`cnt-${side}-ban`); b.style.display = 'grid'; b.textContent = 'BANISH ' + c.banished; b.classList.toggle('empty', !c.banished);
     }
   }
 
@@ -299,6 +312,7 @@
   function hideCmd() { $('cmd').className = ''; $('cmd').innerHTML = ''; document.querySelectorAll('.card.sel').forEach(e => e.classList.remove('sel')); }
   function hint(t) { const h = $('hint'); h.textContent = t; h.classList.add('on'); }
   function hideHint() { $('hint').classList.remove('on'); }
+  async function hidePromptBox() { const box = $('prompt'); box.className = ''; box.innerHTML = ''; shownPrompt = null; }
   function refreshUI() {
     const v = S.view; if (!v) return;
     if (v.gameOver) { showResult(v); return; }
@@ -311,6 +325,7 @@
     document.querySelectorAll('.slot.valid').forEach(e => e.classList.remove('valid'));
     if (S.ui.sel && S.els.get(S.ui.sel)) S.els.get(S.ui.sel).classList.add('sel');
     if (!m) return;
+    if (m.type === 'zonepick') { for (const z of m.zones) { const el = zoneSlotEl(z); if (el) el.classList.add('valid'); } return; }
     const cls = m.type === 'attack' ? 'hl-attack' : m.type === 'tribute' ? 'hl-tribute' : 'hl-target';
     for (const [uid, el] of S.els) {
       if (m.candidates.has(uid)) el.classList.add(cls); else if (uid !== m.source) el.classList.add('dim');
@@ -408,7 +423,15 @@
       onOk: ids => send(action, { uid, target: ids[0] }), onCancel: () => {} });
   }
 
-  function onSlotClick() { if (S.ui.mode) { /* slots are display-only */ } else if (!S.locked) { clearUI(); } }
+  function onSlotClick(side, kind, i) {
+    if (S.ui.mode && S.ui.mode.type === 'zonepick') {
+      const key = side + ':' + (kind === 'mon' ? 'monster' : 'spellTrap') + ':' + i;
+      if (!S.ui.mode.candidates.has(key)) { SFX.play('deny'); return; }
+      SFX.play('click'); finishZonePick({ side, kind: kind === 'mon' ? 'monster' : 'spellTrap', seq: i });
+      return;
+    }
+    if (S.ui.mode) { /* slots are display-only */ } else if (!S.locked) { clearUI(); }
+  }
   $('stage').addEventListener('click', e => { if (!e.target.closest('.card') && !e.target.closest('#cmd') && !e.target.closest('#picker') && !e.target.closest('#prompt') && !S.locked) { if (S.ui.mode || S.ui.sel) clearUI(); } });
   addEventListener('keydown', e => { if (e.key === 'Escape') { const had = !!S.ui.mode; clearUI(); closePicker(true); if (had) { shownPrompt = null; refreshUI(); } } });
 
@@ -427,13 +450,18 @@
   let pk = null;
   function openPicker(o) {
     pk = { ...o, picked: [] };
-    $('pkTitle').textContent = o.title || ''; $('pkSub').textContent = o.sub || '';
+    $('pkTitle').textContent = o.title || '';
+    $('pkSub').textContent = o.sub || '';
+    const boxCls = 'box' + (o.compact ? ' compact' : '');
     const grid = $('pkGrid'); grid.innerHTML = '';
     (o.cards || []).forEach(c => {
-      const d = document.createElement('div'); d.className = 'pc' + (o.viewOnly ? ' view' : '');
-      d.innerHTML = `<img src="${esc(c.image || '')}" alt="" onerror="this.style.opacity=.3"><div class="nm">${esc(c.name)}</div>`;
+      const d = document.createElement('div'); const legalForTurn = o.legal ? o.legal.has(c.uid) : true;
+      d.className = 'pc' + (o.viewOnly ? ' view' : '') + (('legal' in o || o.legal) ? (legalForTurn ? ' legal' : ' grayed') : ' legal');
+      d.innerHTML = `<img src="${esc(c.image || '')}" alt="" onerror="this.style.opacity=.3">${o.legal ? (legalForTurn ? '<i class="lgm">\u2726</i>' : '') : ''}<div class="nm">${esc(c.name)}</div>`;
       d.onmouseenter = () => { S.data.set(c.uid, { ...(S.data.get(c.uid) || {}), ...c }); showInfo(c.uid); };
-      if (!o.viewOnly) d.onclick = () => {
+      d.onclick = () => {
+        if (o.viewOnly) return;
+        if (!legalForTurn) { SFX.play('deny'); return; }
         SFX.play('click');
         const i = pk.picked.indexOf(c.uid);
         if (i >= 0) pk.picked.splice(i, 1);
@@ -445,7 +473,7 @@
     });
     $('pkCancel').style.display = (o.optional || o.viewOnly) ? '' : 'none'; $('pkCancel').textContent = o.viewOnly ? 'Close' : 'Cancel';
     $('pkOk').style.display = o.viewOnly ? 'none' : '';
-    updatePk(); $('picker').classList.add('on');
+    updatePk(); const bx = document.querySelector('#picker .box'); bx.className = boxCls; $('picker').classList.add('on');
   }
   function updatePk() {
     if (!pk) return; const n = pk.picked.length;
@@ -460,15 +488,20 @@
   $('pkOk').onclick = () => { if (!pk || $('pkOk').disabled) return; const ids = pk.picked.slice(), fn = pk.onOk; $('picker').classList.remove('on'); pk = null; fn(ids); };
 
   function openPile(side, k) {
-    if (S.locked && !S.view.gameOver) return;
+    // browsing piles is a read-only action: allowed during the opponent's turn too.
+    // only refuse while an interaction of OURS is in flight on our own turn.
+    if (S.locked && S.view && S.view.turnOf === 'you' && S.view.canAct) return;
     const pv = S.view[side];
     let cards = k === 'gy' ? pv.graveyard : k === 'extra' ? (side === 'you' ? pv.extra : []) : [];
-    if (k === 'extra' && side === 'opp') return;
+    if (k === 'gy') return openPicker({ title: (side === 'you' ? 'Your ' : "Opponent's ") + 'Graveyard', sub: cards.length ? 'Hover a card to read it.' : 'Empty.', cards: cards.slice().reverse(), viewOnly: true, compact: side === 'opp' });
+    if (k === 'extra' && side === 'opp') { return openPicker({ title: "Opponent's Extra Deck", sub: 'Hidden — ' + ((pv.counts || {}).extra || 0) + ' cards', cards: [], viewOnly: true }); }
     if (k === 'deck') return;
     if (k === 'extra' && side === 'you' && S.view.canAct) {
-      const ok = cards.filter(c => c.act && c.act.eng && c.act.eng.length);
-      if (ok.length) return openPicker({ title: 'Extra Deck', sub: 'Choose a monster to summon', cards: ok.slice().reverse(), min: 1, max: 1, optional: true,
-        onOk: ids => { const c = ok.find(x => x.uid === ids[0]); const a = c.act.eng[0]; send('engine', { uid: c.uid, cmd: a.cmd, idx: a.idx }); }, onCancel: () => {} });
+      const legal = new Set((cards || []).filter(c => c.act && c.act.eng && c.act.eng.length).map(c => c.uid));
+      const list = (cards || []).slice().reverse();
+      if (!legal.size) return openPicker({ title: 'Extra Deck', sub: 'No card in there can be summoned right now.', cards: list, viewOnly: true });
+      return openPicker({ title: 'Extra Deck', sub: 'Hover to read. Cards with a \u2726 marker can be summoned now.', cards: list, min: 1, max: 1, optional: true, legal,
+        okEach: true, onOk: ids => { const c = list.find(x => x.uid === ids[0]); const a = c && c.act && c.act.eng && c.act.eng[0]; if (a) send('engine', { uid: c.uid, cmd: a.cmd, idx: a.idx }); }, onCancel: () => {} });
     }
     openPicker({ title: (side === 'you' ? 'Your ' : "Opponent's ") + (k === 'gy' ? 'Graveyard' : 'Extra Deck'), sub: cards.length ? 'Hover a card to read it.' : 'Empty.', cards: cards.slice().reverse(), viewOnly: true });
   }
@@ -476,7 +509,10 @@
     $('cnt-you-ban').onclick = () => openBan('you'); $('cnt-opp-ban').onclick = () => openBan('opp');
     $('cnt-you-ban').style.pointerEvents = $('cnt-opp-ban').style.pointerEvents = 'auto';
   }
-  function openBan(side) { openPicker({ title: 'Banished', sub: '', cards: S.view[side].banished.slice().reverse(), viewOnly: true }); }
+  function openBan(side) {
+    const pv = S.view[side], ba = (pv.banished || []).slice().reverse();
+    openPicker({ title: (side === 'you' ? 'Your ' : "Opponent's ") + 'Banished Zone', sub: ba.length ? ba.length + ' cards. Hover to read.' : 'Empty.', cards: ba, viewOnly: true, compact: true });
+  }
 
   // ------------------------------------------------------------------ prompts
   let shownPrompt = null;
@@ -486,6 +522,7 @@
   function showPrompt(p) {
     const key = promptKey(p); if (shownPrompt === key) return; shownPrompt = key;
     const box = $('prompt'); box.innerHTML = '';
+    box.style.top = box.style.left = box.style.right = box.style.bottom = '';
     const row = html => { const d = document.createElement('div'); d.className = 'row'; d.innerHTML = html || ''; return d; };
     const mk = (label, fn, cls) => { const b = document.createElement('button'); b.className = 'btn small ' + (cls || ''); b.textContent = label; b.onclick = () => { SFX.play('click'); fn(); }; return b; };
     const name = uid => { const c = findCardAnywhere(uid) || S.data.get(uid); return c && c.name ? c.name : 'a card'; };
@@ -505,6 +542,7 @@
       } else p.options.forEach(o => r.appendChild(mk(o.label, () => { shownPrompt = null; send('option', { id: o.id }); })));
       box.appendChild(r); box.className = 'on'; return;
     }
+    if (p.type === 'place') { startZonePick(p); return; }
     if (p.type === 'fieldChoice') { startFieldPick(p); return; }
     if (p.type === 'search') {
       box.innerHTML = `<h3>${esc(p.prompt)}</h3>`; const inp = document.createElement('input'); inp.placeholder = 'Type a card name…';
@@ -577,13 +615,26 @@
     }
   }
 
+  // Master Rule 5 zone choice: Extra Deck summons (synchro/fusion/xyz/link) may use the
+  // two purple Extra Monster Zones or a free Monster Zone; the player picks where to put it.
+  function zoneKey(z) { return z.side + ':' + z.kind + ':' + z.seq; }
+  function zoneSlotEl(z) {
+    if (z.kind === 'monster' && z.seq >= 5) { const list = [...document.querySelectorAll('.slot.emz')]; if (!list.length) return null; const idx = z.side === 'you' ? z.seq - 5 : (z.seq === 5 ? 1 : 0); return list[idx] || null; }
+    if (z.kind === 'spellTrap' && z.seq === 5) return document.getElementById('pile-' + z.side + '-field');
+    return document.querySelector('.slot.' + (z.kind === 'monster' ? 'mon' : 'st') + '[data-side="' + z.side + '"][data-i="' + z.seq + '"]');
+  }
+  function startZonePick(p) {
+    S.ui = { sel: null, mode: { type: 'zonepick', candidates: new Set(p.zones.map(zoneKey)), zones: p.zones } };
+    hint(p.prompt); applyHighlights();
+  }
+  function finishZonePick(z) { if (!z) return; const m = S.ui.mode; if (!m || m.type !== 'zonepick' || !m.candidates.has(zoneKey(z))) return; clearUI(); hidePrompt(); send('place', { side: z.side, kind: z.kind, seq: z.seq }); }
+
   // Blind pick of cards on the field (Trap Master, Fissure ties ...): the cards stay face-down, we only highlight them.
-  function startFieldPick(p) {
-    const cands = new Set(p.uids);
+  function startFieldPick(p) {    const cands = new Set(p.uids);
     S.ui = { sel: null, mode: { type: 'fieldpick', candidates: cands, picked: [], min: p.min, max: p.max, optional: p.optional } };
     hint(p.prompt); applyHighlights();
     const box = $('prompt'); box.innerHTML = ''; box.className = '';
-    if (p.max > 1 || p.optional) {
+    if (p.max > 1 || p.optional || p.min === 0) {
       const r = document.createElement('div'); r.className = 'row';
       const ok = document.createElement('button'); ok.className = 'btn small'; ok.textContent = 'Confirm';
       ok.onclick = () => finishFieldPick(); r.appendChild(ok);
@@ -592,7 +643,7 @@
     }
   }
   function finishFieldPick() {
-    const m = S.ui.mode; if (!m || m.type !== 'fieldpick' || m.picked.length < m.min) return;
+    const m = S.ui.mode; if (!m || m.type !== 'fieldpick' || m.picked.length < (m.min || 0)) return;
     const ids = m.picked.slice(); clearUI(); hidePrompt(); send('choice', { uids: ids });
   }
 

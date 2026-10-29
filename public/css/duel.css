@@ -43,6 +43,9 @@ body { display: grid; place-items: center; user-select: none; -webkit-user-selec
   box-shadow: inset 0 0 22px hsl(calc(var(--hue) - 14) calc(100% * var(--sat)) 62% / .22); transition: .25s;
 }
 .slot.st { opacity: .8; }
+/* mat style: monster zones green, spell/trap zones orange, pendulum ends decorated in modern mode */
+.slot.mon { border-color: rgba(85, 226, 160, .55); box-shadow: inset 0 0 22px rgba(85, 226, 160, .18); }
+.slot.st { border-color: rgba(232, 165, 60, .55); box-shadow: inset 0 0 22px rgba(232, 165, 60, .16); }
 .slot .tag { position: absolute; left: 0; right: 0; bottom: 8px; text-align: center; font-size: 10px; letter-spacing: .24em; color: hsl(calc(var(--hue) - 14) calc(100% * var(--sat)) 75% / .55); font-weight: 700; }
 .slot.pile { border-style: dashed; }
 .slot.valid { border-color: hsl(calc(var(--hue) - 34) calc(100% * var(--sat)) 74%); background: hsl(calc(var(--hue) - 23) calc(100% * var(--sat)) 62% / .24); box-shadow: inset 0 0 28px hsl(calc(var(--hue) - 34) calc(100% * var(--sat)) 72% / .6), 0 0 22px hsl(calc(var(--hue) - 27) calc(100% * var(--sat)) 68% / .6); animation: slotPulse 1s ease-in-out infinite; cursor: pointer; }
@@ -125,7 +128,7 @@ body { display: grid; place-items: center; user-select: none; -webkit-user-selec
 @keyframes dmgFloat { 0% { opacity: 0; transform: translateY(14px) scale(.4); } 14% { opacity: 1; transform: translateY(-6px) scale(1.5); } 30% { transform: translateY(-14px) scale(1); } 100% { opacity: 0; transform: translateY(-64px) scale(1); } }
 
 /* ---------- info panel (left) ---------- */
-#info { position: absolute; left: 14px; top: 106px; width: 352px; height: 650px; padding: 14px; z-index: 55; overflow: hidden;
+#info { position: absolute; left: 14px; top: 106px; width: 352px; height: 650px; padding: 14px; z-index: 990; overflow: hidden;
   background: linear-gradient(180deg, hsl(calc(var(--hue) - 1) calc(78% * var(--sat)) 14% / .92), hsl(calc(var(--hue) + 1) calc(78% * var(--sat)) 9% / .9)); border: 1px solid hsl(calc(var(--hue) - 19) calc(100% * var(--sat)) 70% / .5);
   clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px); }
 #info .img { width: 230px; height: 336px; margin: 0 auto 10px; background: hsl(calc(var(--hue) - 1) calc(66% * var(--sat)) 11%) center/cover no-repeat; border-radius: 4px; box-shadow: 0 8px 28px rgba(0,0,0,.6); position: relative; }
@@ -175,8 +178,11 @@ body { display: grid; place-items: center; user-select: none; -webkit-user-selec
 
 /* ---------- prompts / modals ---------- */
 #prompt { position: absolute; left: 400px; right: 330px; top: 300px; z-index: 970; display: none; padding: 18px 24px; text-align: center;
+  max-height: calc(100% - 320px); overflow-y: auto;
   background: linear-gradient(180deg, hsl(calc(var(--hue) - 2) calc(80% * var(--sat)) 16% / .97), hsl(calc(var(--hue) + 0) calc(80% * var(--sat)) 10% / .97)); border: 1px solid var(--line-strong); box-shadow: 0 0 60px hsl(calc(var(--hue) - 9) calc(100% * var(--sat)) 56% / .45);
   clip-path: polygon(18px 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%, 0 18px); }
+#prompt::-webkit-scrollbar { width: 8px; }
+#prompt::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 4px; }
 #prompt.on { display: block; animation: promptIn .25s ease; }
 @keyframes promptIn { from { opacity: 0; transform: translateY(14px) scale(.96); } }
 #prompt h3 { margin: 0 0 6px; letter-spacing: .14em; color: var(--gold); text-transform: uppercase; }
@@ -186,7 +192,7 @@ body { display: grid; place-items: center; user-select: none; -webkit-user-selec
   background: hsl(calc(var(--hue) - 1) calc(81% * var(--sat)) 13% / .95); border: 1px solid var(--cyan); box-shadow: 0 0 24px hsl(calc(var(--hue) - 25) calc(100% * var(--sat)) 64% / .55); clip-path: polygon(12px 0, calc(100% - 12px) 0, 100% 50%, calc(100% - 12px) 100%, 12px 100%, 0 50%); }
 #hint.on { display: block; animation: promptIn .25s ease; }
 
-#picker { position: absolute; inset: 0; z-index: 980; display: none; place-items: center; background: hsl(calc(var(--hue) + 0) calc(82% * var(--sat)) 4% / .82); backdrop-filter: blur(3px); }
+#picker { position: absolute; left: 400px; right: 0; top: 0; bottom: 0; z-index: 980; display: none; place-items: center; background: hsl(calc(var(--hue) + 0) calc(82% * var(--sat)) 3% / .55); }
 #picker.on { display: grid; animation: promptIn .2s ease; }
 #picker .box { width: 980px; max-height: 760px; padding: 20px 26px; background: linear-gradient(180deg, hsl(calc(var(--hue) - 2) calc(80% * var(--sat)) 16% / .98), hsl(calc(var(--hue) + 1) calc(80% * var(--sat)) 8% / .98)); border: 1px solid var(--line-strong);
   clip-path: polygon(20px 0, 100% 0, 100% calc(100% - 20px), calc(100% - 20px) 100%, 0 100%, 0 20px); box-shadow: 0 0 80px hsl(calc(var(--hue) - 9) calc(100% * var(--sat)) 56% / .4); }
@@ -198,6 +204,11 @@ body { display: grid; place-items: center; user-select: none; -webkit-user-selec
 #picker .pc img { width: 118px; height: 172px; display: block; object-fit: cover; background: hsl(calc(var(--hue) - 2) calc(58% * var(--sat)) 15%); border-radius: 3px; box-shadow: 0 4px 12px rgba(0,0,0,.6); }
 #picker .pc .nm { font-size: 10px; text-align: center; margin-top: 3px; color: hsl(calc(var(--hue) - 9) calc(81% * var(--sat)) 90%); line-height: 1.15; max-height: 24px; overflow: hidden; }
 #picker .pc.pick img { box-shadow: 0 0 0 4px var(--gold), 0 0 24px rgba(242,199,92,.9); }
+#picker .pc:not(.legal):not(.view) { opacity: .42; filter: saturate(.5); }
+#picker .pc.grayed { opacity: .42; filter: saturate(.5); }
+#picker .pc .lgm { position: absolute; top: 6px; right: 8px; z-index: 2; font-style: normal; font-weight: 900; color: #ffdf8d; text-shadow: 0 0 8px rgba(255,215,120,.9), 0 0 3px #000; pointer-events: none; }
+#picker .box.compact { width: auto; min-width: 470px; max-width: 720px; max-height: 640px; }
+#picker .box.compact .grid { max-height: 430px; grid-template-columns: repeat(auto-fill, 100px); }
 #picker .pc.view { cursor: default; }
 #picker .foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; align-items: center; }
 #picker .foot .cnt { margin-right: auto; color: var(--cyan-soft); letter-spacing: .1em; }
@@ -407,6 +418,13 @@ body { display: grid; place-items: center; user-select: none; -webkit-user-selec
 /* Extra Monster Zones (Modern rules) */
 .slot.emz { border-color: hsl(280 85% 72% / .75); background: hsl(275 65% 32% / .30); box-shadow: inset 0 0 26px hsl(280 95% 68% / .38), 0 0 18px hsl(280 90% 60% / .22); }
 .slot.emz.valid { border-color: #7cf2ff; }
+/* MR5 mat decor: the bracket pair around each Extra Monster Zone + the pendulum diamonds at the S/T row ends */
+.slot.emz::before { content: ""; position: absolute; left: -7px; right: -7px; top: -4px; bottom: -4px; border: 1px solid rgba(124, 242, 255, .55); border-radius: 3px; pointer-events: none;
+  clip-path: polygon(0 0, 26% 0, 26% 6%, 74% 6%, 74% 0, 100% 0, 100% 100%, 74% 100%, 74% 94%, 26% 94%, 26% 100%, 0 100%); }
+.slot.emz::after { content: "\25C6"; position: absolute; inset: 0; display: grid; place-items: center; color: rgba(124, 242, 255, .35); font-size: 15px; pointer-events: none; }
+/* pendulum zone mounts (modern mat): decorative diamond tiles flanking the spell/trap rows */
+.slot.pend { border-color: rgba(124, 242, 255, .35); background: rgba(8, 50, 84, .38); box-shadow: none; pointer-events: none; }
+.slot.pend::after { content: ""; position: absolute; inset: 0; margin: auto; width: 0; height: 0; border-left: 26px solid transparent; border-right: 26px solid transparent; border-bottom: 44px solid var(--pc); opacity: .5; pointer-events: none; }
 
 /* Link arrows */
 .lmk { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
