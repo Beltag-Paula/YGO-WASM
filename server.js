@@ -35,18 +35,18 @@ app.get('/pics/c/:file', sendArt('c')); app.get('/pics/:file', sendArt(''));
 // ---- matchmaking + duel ----
 // Each browser TAB is a player (header x-tab), so two tabs of one browser can duel each other.
 const tabOf = req => String(req.get('x-tab') || req.query.tab || 'anon').slice(0, 64);
-let waiting = null; const inMatch = new Map(); // tab -> { match, seat }
-const leaveQueue = tab => { if (waiting && waiting.tab === tab) waiting = null; };
+const waiting = { classic: null, modern: null }; const inMatch = new Map(); // tab -> { match, seat, mode }
+const leaveQueue = tab => { for (const k of Object.keys(waiting)) if (waiting[k] && waiting[k].tab === tab) waiting[k] = null; };
 app.post('/api/duel/join', (req, res) => { const tab = tabOf(req), b = req.body || {};
   const deck = DeckInventory.readDeck(b.playerDeck); if (!deck) return res.status(400).json({ error: 'Choose your deck first.' });
   const p = playable(deck); if (p.main.length < 10) return res.status(400).json({ error: 'That deck has too few cards the engine knows.' });
   const sum = DeckInventory.summarize(b.playerDeck, deck);
   const me = { tab, main: p.main, extra: p.extra, name: ('' + (b.playerName || sum.ownerName || 'Duelist')).slice(0, 24), deckName: sum.name, avatar: DeckInventory.cleanAvatar(b.playerAvatar) || sum.portrait || null, frame: DeckInventory.cleanFrame(b.playerFrame) || sum.frame || null };
-  inMatch.delete(tab); leaveQueue(tab);
-  if (waiting && waiting.tab !== tab) { const pair = Math.random() < 0.5 ? [waiting, me] : [me, waiting]; const match = new Match(pair); pair.forEach((pl, seat) => inMatch.set(pl.tab, { match, seat })); waiting = null; return res.json({ status: 'started' }); }
-  waiting = me; res.json({ status: 'waiting' }); });
+  const mode = b.mode === 'modern' ? 'modern' : 'classic'; inMatch.delete(tab); leaveQueue(tab);
+  if (waiting[mode] && waiting[mode].tab !== tab) { const w = waiting[mode], pair = Math.random() < 0.5 ? [w, me] : [me, w]; const match = new Match(pair, { rules: mode }); pair.forEach((pl, seat) => inMatch.set(pl.tab, { match, seat, mode })); waiting[mode] = null; return res.json({ status: 'started', mode }); }
+  waiting[mode] = me; res.json({ status: 'waiting', mode }); });
 app.get('/api/duel/lobby', (req, res) => { const tab = tabOf(req), m = inMatch.get(tab);
-  if (m && !m.match.over) return res.json({ status: 'started' }); if (waiting && waiting.tab === tab) return res.json({ status: 'waiting' }); res.json({ status: 'idle' }); });
+  if (m && !m.match.over) return res.json({ status: 'started', mode: m.mode }); if (Object.values(waiting).some(w => w && w.tab === tab)) return res.json({ status: 'waiting' }); res.json({ status: 'idle' }); });
 app.post('/api/duel/leave', (req, res) => { const tab = tabOf(req); leaveQueue(tab); res.json({ ok: true }); });
 const getMatch = req => inMatch.get(tabOf(req));
 app.get('/api/duel/state', (req, res) => { const m = getMatch(req); if (!m) return res.status(404).json({ error: 'No duel in progress' }); res.json(m.match.act(m.seat, 'state')); });

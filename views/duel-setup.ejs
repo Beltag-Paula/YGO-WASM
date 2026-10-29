@@ -13,13 +13,15 @@
 <div class="setup-footer">
   <div><div class="sub" style="margin:0 0 6px;font-size:12px">YOUR DUELIST</div>
     <button class="avatar-btn" id="bAvatar"><span class="av-mini" id="avImg"></span><span id="avName">Auto</span></button></div>
+  <div><div class="sub" style="margin:0 0 6px;font-size:12px">PLAY STYLE</div>
+    <div class="seg" id="mode"><button data-v="classic" class="on" title="Traditional board: five monster zones, no Extra Monster Zones">Classic</button><button data-v="modern" title="Current rules: the two Extra Monster Zones in the middle, Links and Pendulum">Modern</button></div></div>
   <div style="flex:1"></div>
   <span class="warn" id="warn"></span>
   <button class="btn gold" id="go">Find Opponent</button>
 </div>
 <script>
 const $ = id => document.getElementById(id);
-let myAvatar = '', myFrame = '', decks = [], mine = null, searching = false, timer = null;
+let myAvatar = '', myFrame = '', decks = [], mine = null, searching = false, timer = null, mode = 'classic';
 const params = new URLSearchParams(location.search);
 function caseEl(d) {
   const el = document.createElement('div'); el.className = caseClass(d) + (mine === d.id ? ' sel' : '');
@@ -49,7 +51,7 @@ $('go').onclick = async () => {
   $('go').disabled = true;
   try {
     localStorage.setItem('ygo.mine', mine); localStorage.setItem('ygo.avatar', myAvatar); localStorage.setItem('ygo.frame', myFrame);
-    const j = await api('/api/duel/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ playerDeck: mine, playerAvatar: myAvatar, playerFrame: myFrame }) });
+    const j = await api('/api/duel/join', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ playerDeck: mine, playerAvatar: myAvatar, playerFrame: myFrame, mode }) });
     if (j.status === 'started') location.href = '/duel/play'; else setSearching(true);
   } catch (e) { toast(e.message, true); $('go').disabled = false; }
 };
@@ -66,6 +68,8 @@ function paintAv() {
   $('avImg').innerHTML = avatarHTML(myAvatar || (d && d.portrait) || '/images/avatar/Kuriboh-DAR.png', myFrame || (d && d.frame) || DEFAULT_FRAME, 'You');
   $('avName').textContent = myAvatar ? decodeURIComponent(myAvatar.split('/').pop()).replace(/-DAR.*$/, '') : 'Deck default';
 }
+document.querySelectorAll('#mode button').forEach(b => { b.onclick = () => { if (searching) return; mode = b.dataset.v; try { localStorage.setItem('ygo.mode', mode); } catch (e) { /* ignore */ } document.querySelectorAll('#mode button').forEach(x => x.classList.toggle('on', x === b)); }; });
+try { const m = localStorage.getItem('ygo.mode'); if (m === 'classic' || m === 'modern') { mode = m; document.querySelectorAll('#mode button').forEach(x => x.classList.toggle('on', x.dataset.v === m)); } } catch (e) { /* ignore */ }
 $('bAvatar').onclick = async () => { if (searching) return; const v = await pickAvatar({ avatar: myAvatar, frame: myFrame }); if (v === null) return; myAvatar = v.avatar; myFrame = v.frame; paintAv(); };
 </script>
 </div></body></html>

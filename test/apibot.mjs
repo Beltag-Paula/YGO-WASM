@@ -2,7 +2,7 @@ const BASE = process.env.BASE || 'http://localhost:3200'; const evTypes = {}, pr
 const call = async (tab, method, url, body) => { const r = await fetch(BASE + url, { method, headers: { 'content-type': 'application/json', 'x-tab': tab }, body: body ? JSON.stringify(body) : undefined }); let j = null; try { j = await r.json() } catch {} return { s: r.status, j } };
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 async function player(tab, deck, name) {
-  let r = await call(tab, 'POST', '/api/duel/join', { playerDeck: deck }); if (r.s !== 200) { errs.push('join ' + JSON.stringify(r.j)); return; }
+  let r = await call(tab, 'POST', '/api/duel/join', { playerDeck: deck, mode: process.env.MODE || 'classic' }); if (r.s !== 200) { errs.push('join ' + JSON.stringify(r.j)); return; }
   for (let i = 0; i < 50; i++) { const l = await call(tab, 'GET', '/api/duel/lobby'); if (l.j.status === 'started') break; await sleep(200); }
   let res = (await call(tab, 'GET', '/api/duel/state')).j; const t0 = Date.now(); let idle = 0;
   while (Date.now() - t0 < (+process.env.SECS || 40) * 1000) {

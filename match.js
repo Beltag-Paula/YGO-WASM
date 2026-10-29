@@ -24,11 +24,11 @@ const U = (b, o) => b.readUInt32LE(o);
 const locInfo = (b, o) => ({ con: b[o], loc: b[o + 1], seq: U(b, o + 2), pos: U(b, o + 6) });
 
 export class Match {
-  constructor(players) { // players[seat] = { name, deckName, avatar, frame, main:[codes], extra:[codes] }
-    this.pl = players; this.turn = 0; this.tp = 0; this.phase = ''; this.over = false; this.winner = null; this.pending = null; this.logs = [];
+  constructor(players, opts = {}) { // players[seat] = { name, deckName, avatar, frame, main:[codes], extra:[codes] }
+    this.rules = opts.rules === 'modern' ? 'modern' : 'classic'; this.pl = players; this.turn = 0; this.tp = 0; this.phase = ''; this.over = false; this.winner = null; this.pending = null; this.logs = [];
     this.lp = [8000, 8000]; this.chain = []; this.atk = null; this.auto = null; this.stuck = 0; this.lastSummon = null; this.firstSeat = 0;
     this.seat = [0, 1].map(() => ({ ent: [], nextUid: 1, outbox: [], wake: null, dest: new Map() }));
-    this.duel = E.ygo_create((Math.random() * 2 ** 32) >>> 0, (Math.random() * 2 ** 32) >>> 0, 8000, 5, 1, 0x28800, 0); // MR5 without the extra monster zones (the mat has none)
+    this.duel = E.ygo_create((Math.random() * 2 ** 32) >>> 0, (Math.random() * 2 ** 32) >>> 0, 8000, 5, 1, this.rules === 'modern' ? 0x2E800 : 0x28800, 0); // modern: full Master Rule 5 with the two Extra Monster Zones; classic: the traditional board without them
     if (!this.duel) throw new Error('Duel creation failed');
     for (const s of ['constant.lua', 'utility.lua']) loadScript(this.duel, fs.readFileSync(path.join(SCRIPTS, s)), s);
     for (let t = 0; t < 2; t++) { shuffled(players[t].main).forEach((c, i) => E.ygo_new_card(this.duel, c, t, 0, t, 0x01, i, 0x8)); players[t].extra.forEach((c, i) => E.ygo_new_card(this.duel, c, t, 0, t, 0x40, i, 0x8)); }
@@ -88,7 +88,7 @@ export class Match {
   // ---------------------------------------------------------------- snapshots and card identity
   _snap() { const out = [];
     for (const con of [0, 1]) for (const loc of QLOCS) { const cs = queryLoc(this.duel, con, loc);
-      cs.forEach((c, seq) => { if (c) out.push({ con, loc, seq, code: c.code || 0, pos: c.pos || 0, type: c.type || 0, level: c.level, rank: c.rank, atk: c.atk, def: c.def, link: c.link, xyz: c.xyz }); }); }
+      cs.forEach((c, seq) => { if (c) out.push({ con, loc, seq, code: c.code || 0, pos: c.pos || 0, type: c.type || 0, level: c.level, rank: c.rank, atk: c.atk, def: c.def, link: c.link, marker: c.marker, xyz: c.xyz, lscale: c.lscale, rscale: c.rscale }); }); }
     for (const con of [0, 1]) this.deckCount = (this.deckCount || [0, 0]), this.deckCount[con] = E.ygo_query_count(this.duel, con, LOC.DECK);
     return out; }
   _vcode(v, e) { if (e.loc === LOC.HAND || e.loc === LOC.EXTRA) return e.con === v ? e.code : 0; if ((e.loc === LOC.MZ || e.loc === LOC.SZ || e.loc === LOC.BANISH) && (e.pos & 0xa)) return e.con === v ? e.code : 0; return e.code; }
@@ -136,6 +136,7 @@ export class Match {
     if (!reveal || !e.code) return o; const i = info(e.code) || {}, t = e.type || i.type || 0, mon = !!(t & 1);
     Object.assign(o, { id: e.code, name: i.name || ('#' + e.code), image: '/pics/' + e.code + '.jpg', art: '/pics/c/' + e.code + '.jpg', type: typeStr(t), frame: frameOf(t), race: mon ? raceName(i.race) : null, attr: mon ? ATTR[i.attribute] || null : null,
       level: mon ? (t & 0x800000 ? e.rank : t & 0x4000000 ? null : (e.level || (i.level & 0xff))) : null, desc: i.desc || '', fx: [], isMonster: mon });
+    if (e.xyz) o.overlay = e.xyz; if (t & 0x4000000) { o.linkRating = e.link; o.marker = e.marker; } if (t & 0x1000000) { o.lscale = e.lscale; o.rscale = e.rscale; }
     if (mon) { const link = t & 0x4000000; o.baseAtk = i.atk; o.baseDef = link ? null : i.def; if (e.loc === LOC.MZ) { o.atk = e.atk; o.def = link ? null : e.def; } else { o.atk = o.baseAtk; o.def = o.baseDef; } }
     return o; }
   _acts(v) { const P = this.pending, map = new Map(); if (!P || P.player !== v || this.over) return map; const add = (e, k, val) => { const key = keyOf(e.con, e.loc, e.seq); if (!map.has(key)) map.set(key, {}); const m = map.get(key); if (k === 'eng') (m.eng = m.eng || []).push(val); else m[k] = val; };
@@ -161,6 +162,9 @@ export class Match {
       graveyard: list(LOC.GRAVE).map(e => this._cardView(v, e, true)), banished: list(LOC.BANISH).map(e => this._cardView(v, e, !!e.vcode || isYou)), hand: list(LOC.HAND).map(mk) };
     if (isYou) { view.extra = list(LOC.EXTRA).map(e => { const c = this._cardView(v, e, true); c.act = acts.get(keyOf(e.con, e.loc, e.seq)) || {}; return c; }); view.normalSummoned = false; }
     return view; }
+  _emz(v) { const ent = this.seat[v].ent, acts = this._acts(v), find = (con, seq) => ent.find(e => e.con === con && e.loc === LOC.MZ && e.seq === seq);
+    const mk = e => { if (!e) return null; const c = this._cardView(v, e, e.con === v || !!e.vcode); c.side = e.con === v ? 'you' : 'opp'; if (e.con === v) c.act = acts.get(keyOf(e.con, e.loc, e.seq)) || {}; return c; };
+    return [mk(find(v, 5) || find(1 - v, 6)), mk(find(v, 6) || find(1 - v, 5))]; } // left / right physical zone as this player sees the mat
   _chainView(v) { return this.chain.map((r, i) => { const code = U(r.body, 0), l = locInfo(r.body, 4), e = this._entAt(v, l.con, l.loc, l.seq); return { n: i + 1, uid: e ? e.uid : null, name: cname(code), side: this.side(r.body[14], v), negated: false }; }); }
   _promptView(v) { const P = this.pending; if (!P || this.over || P.player !== v || P.kind === 'IDLECMD' || P.kind === 'BATTLECMD') return null;
     const ent = this.seat[v].ent, uidOf = c => { const e = this._entAt(v, c.con, c.loc, c.seq); return e ? e.uid : null; };
@@ -174,6 +178,8 @@ export class Match {
         if (this.atk) { const a = locInfo(this.atk.body, 0), t = locInfo(this.atk.body, 10); return { type: 'battleResponse', attacker: (this._entAt(v, a.con, a.loc, a.seq) || {}).uid || null, target: t.loc ? (this._entAt(v, t.con, t.loc, t.seq) || {}).uid || null : null, handOptions: [], ...base }; }
         if (this.lastSummon && this.chain.length === 0 && this.lastSummon.id !== 70) { const l = locInfo(this.lastSummon.body, 4); return { type: 'summonResponse', summoned: (this._entAt(v, l.con, l.loc, l.seq) || {}).uid || null, ...base }; }
         const top = this.chain[this.chain.length - 1]; return { type: 'chain', links: this._chainView(v), lastName: top ? cname(U(top.body, 0)) : '', ...base }; }
+      case 'PLACE': case 'DISFIELD': { const zones = []; for (let pl = 0; pl < 2; pl++) for (const [base, kind, n] of [[0, 'monster', 7], [8, 'spellTrap', 6]]) for (let q = 0; q < n; q++) if (!(P.flag & (1 << (16 * pl + base + q)))) zones.push({ side: pl === 0 ? 'you' : 'opp', kind, seq: q });
+        return { type: 'place', prompt: P.kind === 'PLACE' ? 'Choose a zone' : 'Choose a zone to disable', zones }; }
       case 'YESNO': return { type: 'option', prompt: P.desc, options: [{ id: '1', label: 'Yes' }, { id: '0', label: 'No' }], cards: [] };
       case 'EFFECTYN': return { type: 'option', prompt: P.card.name + ' — ' + P.desc, options: [{ id: '1', label: 'Yes' }, { id: '0', label: 'No' }], cards: [] };
       case 'OPTION': return { type: 'option', prompt: 'Choose an option', options: P.options.map((o, i) => ({ id: String(i), label: o })), cards: [] };
@@ -191,7 +197,7 @@ export class Match {
     const you = this._playerView(v, v), opp = this._playerView(v, 1 - v), prompt = this._promptView(v), canAct = !!idle && this.tp === v; const phaseButtons = [];
     if (canAct) { if (P.kind === 'IDLECMD') { if (P.bp) phaseButtons.push({ id: 'battle', label: 'Battle Phase' }); if (P.ep) phaseButtons.push({ id: 'end', label: 'End Turn' }); } else { if (P.m2) phaseButtons.push({ id: 'm2', label: 'Main Phase 2' }); if (P.ep) phaseButtons.push({ id: 'end', label: 'End Turn' }); } }
     const a = this.atk && locInfo(this.atk.body, 0), t = this.atk && locInfo(this.atk.body, 10);
-    return { turn: this.turn, phase: this.phase || 'draw', turnOf: this.tp === v ? 'you' : 'opp', first: this.firstSeat === v ? 'you' : 'opp', gameOver: this.over, winner: this.over && this.winner != null ? this.side(this.winner, v) : null,
+    return { rules: this.rules, emz: this.rules === 'modern' ? this._emz(v) : undefined, turn: this.turn, phase: this.phase || 'draw', turnOf: this.tp === v ? 'you' : 'opp', first: this.firstSeat === v ? 'you' : 'opp', gameOver: this.over, winner: this.over && this.winner != null ? this.side(this.winner, v) : null,
       you, opp, prompt, canAct, phaseButtons, chain: this._chainView(v), botBusy: !this.over && !(P && P.player === v), log: this.logs.slice(-40),
       pendingAttack: a ? { attacker: (this._entAt(v, a.con, a.loc, a.seq) || {}).uid || null, target: t && t.loc ? (this._entAt(v, t.con, t.loc, t.seq) || {}).uid || null : null } : null }; }
 
@@ -231,6 +237,7 @@ export class Match {
       if (P.kind === 'POSITION') return respond(encode(P, { pos: Number(id) }));
       if (P.kind === 'ANNOUNCE_RACE' || P.kind === 'ANNOUNCE_ATTRIB') return respond(encode(P, { mask: Number(id) }));
       return respond(i32(-1)); }
+    if (type === 'place' && (P.kind === 'PLACE' || P.kind === 'DISFIELD')) return respond(encode(P, { player: p.side === 'you' ? v : 1 - v, loc: p.kind === 'monster' ? 4 : 8, seq: Number(p.seq) }));
     if (type === 'announceCard' && P.kind === 'ANNOUNCE_CARD') return respond(encode(P, { code: Number(p.code) }));
     if (type === 'choice' || type === 'cancelChoice') {
       const uids = p.uids || [], idxOf = u => { const e = ent.find(x => x.uid === u); const i = e ? P.cards.findIndex(c => c.con === e.con && c.loc === e.loc && c.seq === e.seq) : -1; return i >= 0 ? i : (String(u).startsWith('p') ? Number(String(u).slice(1)) : -1); };

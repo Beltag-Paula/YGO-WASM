@@ -34,7 +34,7 @@ const getLen = () => new Uint32Array(mem.buffer, lenp, 1)[0];
 
 // ---------- query / state ----------
 const LOCS = { deck: 0x01, hand: 0x02, mz: 0x04, sz: 0x08, grave: 0x10, banish: 0x20, extra: 0x40 };
-const QF = 0x1 | 0x2 | 0x8 | 0x10 | 0x20 | 0x40 | 0x100 | 0x200 | 0x10000 | 0x800000; // code pos type lvl rank attr atk def overlay link
+const QF = 0x1 | 0x2 | 0x8 | 0x10 | 0x20 | 0x40 | 0x100 | 0x200 | 0x10000 | 0x200000 | 0x400000 | 0x800000; // code pos type lvl rank attr atk def overlay lscale rscale link
 function queryLoc(duel, con, loc) {
   const p = E.ygo_query_loc(duel, lenp, QF, con, loc); const b = rd(p, getLen()); const cards = []; let o = 4;
   while (o < b.length) { const sz = b.readUInt16LE(o); if (!sz) { o += 2; cards.push(null); continue; } const c = {};
@@ -42,7 +42,7 @@ function queryLoc(duel, con, loc) {
       if (f === 1) c.code = b.readUInt32LE(v); else if (f === 2) c.pos = b.readUInt32LE(v); else if (f === 8) c.type = b.readUInt32LE(v);
       else if (f === 0x10) c.level = b.readUInt32LE(v) & 0xff; else if (f === 0x20) c.rank = b.readUInt32LE(v); else if (f === 0x40) c.attr = b.readUInt32LE(v);
       else if (f === 0x100) c.atk = b.readInt32LE(v); else if (f === 0x200) c.def = b.readInt32LE(v);
-      else if (f === 0x10000) { const n = b.readUInt32LE(v); c.xyz = n; } else if (f === 0x800000) { c.link = b.readUInt32LE(v); c.marker = b.readUInt32LE(v + 4); }
+      else if (f === 0x10000) { const n = b.readUInt32LE(v); c.xyz = n; } else if (f === 0x200000) c.lscale = b.readUInt32LE(v); else if (f === 0x400000) c.rscale = b.readUInt32LE(v); else if (f === 0x800000) { c.link = b.readUInt32LE(v); c.marker = b.readUInt32LE(v + 4); }
       o += s + 2; }
     cards.push(c); }
   return cards;

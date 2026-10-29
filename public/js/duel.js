@@ -16,15 +16,20 @@
   const CW = 104, CH = 152, GAP = 26, X0 = 523;
   const ROW = { oppST: 70, oppMon: 236, youMon: 422, youST: 588 };
   const COLL = 393, COLR = 1173;
+  let MODERN = false, FS = 1; // Modern rules: five rows with the two Extra Monster Zones in the middle; field cards drawn a little smaller
+  const P2 = 102, MCY = { oppST: 134, oppMon: 268, emz: 402, youMon: 536, youST: 670 };
+  const emzPos = i => ({ x: 835 + (i ? 1 : -1) * P2 - CW / 2, y: MCY.emz - CH / 2 });
   const FRAME_COLOR = { normal: '#c8a53c', effect: '#b9622e', spell: '#1d9e8a', trap: '#b03b83', fusion: '#7b4fa3', ritual: '#3f6fb5', synchro: '#d8d8d8', xyz: '#222', link: '#1b5ea6' };
 
   function zonePos(side, kind, i) {
     const col = side === 'you' ? i : 4 - i;
+    if (MODERN) { const r = side === 'you' ? (kind === 'mon' ? 'youMon' : 'youST') : (kind === 'mon' ? 'oppMon' : 'oppST'); return { x: 835 + (col - 2) * P2 - CW / 2, y: MCY[r] - CH / 2 }; }
     const x = X0 + col * (CW + GAP);
     const y = side === 'you' ? (kind === 'mon' ? ROW.youMon : ROW.youST) : (kind === 'mon' ? ROW.oppMon : ROW.oppST);
     return { x, y };
   }
   function pilePos(side, k) {
+    if (MODERN) { const L = 835 - 3 * P2, R = 835 + 3 * P2; const m = side === 'you' ? { gy: [R, 'youMon'], deck: [R, 'youST'], extra: [L, 'youST'], field: [L, 'youMon'] } : { gy: [L, 'oppMon'], deck: [L, 'oppST'], extra: [R, 'oppST'], field: [R, 'oppMon'] }; const q = m[k] || m.gy; return { x: q[0] - CW / 2, y: MCY[q[1]] - CH / 2 }; }
     const m = side === 'you'
       ? { gy: [COLR, ROW.youMon], deck: [COLR, ROW.youST], extra: [COLL, ROW.youST], field: [COLL, ROW.youMon] }
       : { gy: [COLL, ROW.oppMon], deck: [COLL, ROW.oppST], extra: [COLR, ROW.oppST], field: [COLR, ROW.oppMon] };
@@ -102,23 +107,28 @@
         for (const kind of ['mon', 'st']) {
           const p = zonePos(side, kind, i), d = document.createElement('div');
           d.className = 'slot ' + kind; d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.dataset.side = side; d.dataset.kind = kind; d.dataset.i = i;
-          d.onclick = () => onSlotClick(side, kind, i); host.appendChild(d);
+          if (MODERN) d.style.transform = `scale(${FS})`; d.onclick = () => onSlotClick(side, kind, i); host.appendChild(d);
         }
       }
       for (const [k, label] of [['deck', 'DECK'], ['extra', 'EXTRA'], ['gy', 'GRAVE'], ['field', 'FIELD']]) {
         const p = pilePos(side, k), d = document.createElement('div');
-        d.className = 'slot pile'; d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.id = `pile-${side}-${k}`;
+        d.className = 'slot pile'; d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.id = `pile-${side}-${k}`; if (MODERN) d.style.transform = `scale(${FS})`;
         if (k === 'deck' || k === 'extra') d.innerHTML = '<div class="stk"><i></i><i></i><i></i></div>';
         host.appendChild(d);
-        const l = document.createElement('div'); l.className = 'pile-label'; l.style.left = p.x + 'px'; l.style.top = (p.y + 66) + 'px'; l.textContent = label; host.appendChild(l);
+        const l = document.createElement('div'); l.className = 'pile-label'; l.style.left = p.x + 'px'; l.style.top = (p.y + (MODERN ? CH / 2 - 10 * FS : 66)) + 'px'; l.textContent = label; host.appendChild(l);
         if (k !== 'field') {
-          const c = document.createElement('div'); c.className = 'pile-count'; c.id = `cnt-${side}-${k}`; c.style.left = (p.x + 72) + 'px'; c.style.top = (p.y + 128) + 'px'; c.textContent = '0'; host.appendChild(c);
-          const h = document.createElement('div'); h.className = 'pile-hit'; h.style.left = p.x + 'px'; h.style.top = p.y + 'px';
+          const c = document.createElement('div'); c.className = 'pile-count'; c.id = `cnt-${side}-${k}`; c.style.left = (p.x + (MODERN ? CW / 2 + 20 * FS : 72)) + 'px'; c.style.top = (p.y + (MODERN ? CH / 2 + 52 * FS : 128)) + 'px'; c.textContent = '0'; host.appendChild(c);
+          const h = document.createElement('div'); h.className = 'pile-hit'; h.style.left = p.x + 'px'; h.style.top = p.y + 'px'; if (MODERN) h.style.transform = `scale(${FS})`;
           h.onclick = () => openPile(side, k); host.appendChild(h);
         }
       }
       const b = document.createElement('div'), p = pilePos(side, 'gy');
       b.className = 'pile-count'; b.id = `cnt-${side}-ban`; b.style.cssText += `left:${p.x + 2}px;top:${p.y + 2}px;background:rgba(70,20,40,.92);border-color:#ff8a9a;display:none`; b.title = 'Banished'; host.appendChild(b);
+    }
+    if (MODERN) for (let i = 0; i < 2; i++) {
+      const p = emzPos(i), d = document.createElement('div');
+      d.className = 'slot emz'; d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.style.transform = `scale(${FS})`; host.appendChild(d);
+      const l = document.createElement('div'); l.className = 'pile-label'; l.style.left = p.x + 'px'; l.style.top = (p.y + CH / 2 + 24 * FS) + 'px'; l.textContent = 'EXTRA MONSTER'; host.appendChild(l);
     }
   }
 
@@ -138,6 +148,9 @@
     return el;
   }
 
+  const MARK = [[0x40, 'tl', '\u25E4'], [0x80, 't', '\u25B2'], [0x100, 'tr', '\u25E5'], [0x8, 'l', '\u25C0'], [0x20, 'r', '\u25B6'], [0x1, 'bl', '\u25E3'], [0x2, 'b', '\u25BC'], [0x4, 'br', '\u25E2']];
+  const linkArrows = m => MARK.filter(a => m & a[0]).map(a => `<i class="lm ${a[1]}">${a[2]}</i>`).join('');
+  const flipMarker = m => { const F = { 0x40: 0x4, 0x80: 0x2, 0x100: 0x1, 0x8: 0x20, 0x20: 0x8, 0x1: 0x100, 0x2: 0x80, 0x4: 0x40 }; let o = 0; for (const k of Object.keys(F)) if (m & k) o |= F[k]; return o; };
   function applyPos(el, t) {
     el.style.setProperty('--x', t.x + 'px'); el.style.setProperty('--y', t.y + 'px');
     el.style.setProperty('--r', (t.r || 0) + 'deg'); el.style.setProperty('--s', t.s == null ? 1 : t.s);
@@ -152,6 +165,7 @@
       pv.monsters.forEach((c, i) => c && placements.push({ c, side, zone: 'mon', i }));
       pv.spellTrap.forEach((c, i) => c && placements.push({ c, side, zone: 'st', i }));
       if (pv.field) placements.push({ c: pv.field, side, zone: 'field', i: 0 });
+      if (side === 'you' && view.emz) view.emz.forEach((c, i) => c && placements.push({ c, side: c.side || 'you', zone: 'mon', i: 5 + i, emz: true }));
       pv.graveyard.slice(-2).forEach((c, k, a) => placements.push({ c, side, zone: 'gy', i: k, top: k === a.length - 1 }));
     }
     const seen = new Set(); let newHand = 0;
@@ -168,10 +182,10 @@
       // target transform
       let t, down = false, def = false;
       if (p.zone === 'hand') { t = handPos(p.side, p.i, p.n); down = p.side === 'opp'; }
-      else if (p.zone === 'mon') { const z = zonePos(p.side, 'mon', p.i); def = p.c.pos === 'defense'; t = { x: z.x, y: z.y, r: def ? 90 : 0, s: def ? .86 : 1 }; down = !p.c.faceUp; }
-      else if (p.zone === 'st') { const z = zonePos(p.side, 'st', p.i); t = { x: z.x, y: z.y, r: 0, s: 1 }; down = !p.c.faceUp; }
-      else if (p.zone === 'field') { const z = pilePos(p.side, 'field'); t = { x: z.x, y: z.y, r: 0, s: 1 }; down = !p.c.faceUp; }
-      else { const z = pilePos(p.side, 'gy'); t = { x: z.x, y: z.y, r: 0, s: 1 }; }
+      else if (p.zone === 'mon') { const z = p.emz ? emzPos(p.i - 5) : zonePos(p.side, 'mon', p.i); def = p.c.pos === 'defense'; t = { x: z.x, y: z.y, r: def ? 90 : 0, s: (def ? .86 : 1) * FS }; down = !p.c.faceUp; }
+      else if (p.zone === 'st') { const z = zonePos(p.side, 'st', p.i); t = { x: z.x, y: z.y, r: 0, s: FS }; down = !p.c.faceUp; }
+      else if (p.zone === 'field') { const z = pilePos(p.side, 'field'); t = { x: z.x, y: z.y, r: 0, s: FS }; down = !p.c.faceUp; }
+      else { const z = pilePos(p.side, 'gy'); t = { x: z.x, y: z.y, r: 0, s: FS }; }
       if (p.side === 'opp' && p.zone === 'hand') t.r = 180 + (p.i - (p.n - 1) / 2) * -2;
       S.pos.set(uid, { ...t, def });
       el.classList.toggle('down', down); el.classList.toggle('def', def);
@@ -182,6 +196,11 @@
       if (fresh && p.zone === 'hand') { el.style.transitionDelay = (newHand++ * 90) + 'ms'; setTimeout(() => { el.style.transitionDelay = ''; }, 1200); }
       if (p.c.image) { const img = el.querySelector('img'); if (img.dataset.src !== p.c.image) { img.dataset.src = p.c.image; img.src = p.c.image; el.classList.remove('noimg'); }
         const ph = el.querySelector('.ph'); ph.textContent = p.c.name || ''; ph.style.setProperty('--fc', FRAME_COLOR[p.c.frame] || '#888'); }
+      if (p.c.marker) { // Link arrows; the opponent's are turned around because their cards face the other way
+        const m = p.side === 'opp' ? flipMarker(p.c.marker) : p.c.marker; let lk = el.querySelector('.lmk');
+        if (!lk) { lk = document.createElement('div'); lk.className = 'lmk'; el.querySelector('.front').appendChild(lk); }
+        if (lk.dataset.m !== String(m)) { lk.dataset.m = String(m); lk.innerHTML = linkArrows(m); }
+      }
       const old = el.querySelector('.counter'); if (p.c.counter && !old) { const c = document.createElement('div'); c.className = 'counter'; el.querySelector('.front').appendChild(c); } else if (!p.c.counter && old) old.remove();
       el.classList.remove('snap');
       applyPos(el, t);
@@ -209,10 +228,10 @@
       keep.add(uid);
       let el = S.stats.get(uid);
       if (!el) { el = document.createElement('div'); el.className = 'stat'; $('stats').appendChild(el); S.stats.set(uid, el); }
-      const p = S.pos.get(uid), cx = p.x + CW / 2, halfH = p.def ? 45 : CH / 2, cy = p.y + CH / 2;
+      const p = S.pos.get(uid), cx = p.x + CW / 2, halfH = (p.def ? 45 : CH / 2) * FS, cy = p.y + CH / 2;
       el.style.setProperty('--x', p.x + 'px'); el.style.setProperty('--y', (cy + halfH - 21) + 'px');
       const cls = (v, b) => v > b ? 'up' : v < b ? 'down' : '';
-      el.innerHTML = `<span class="${cls(d.atk, d.baseAtk)}">${d.atk}</span> / <span class="${cls(d.def, d.baseDef)}">${d.def}</span>`;
+      el.innerHTML = d.def == null ? `<span class="${cls(d.atk, d.baseAtk)}">${d.atk}</span>` : `<span class="${cls(d.atk, d.baseAtk)}">${d.atk}</span> / <span class="${cls(d.def, d.baseDef)}">${d.def}</span>`;
     }
     for (const [uid, el] of [...S.stats]) if (!keep.has(uid)) { el.remove(); S.stats.delete(uid); }
   }
@@ -270,7 +289,7 @@
     box.innerHTML = `<div class="img" style="background-image:url('${esc(bigImg(d.image))}')"></div>
       <div class="nm">${esc(d.name)}</div>
       <div class="meta">${esc([d.attr, d.race, d.type].filter(Boolean).join(' · '))} ${stars ? '· <span style="color:#ffd36a">' + stars + '</span>' : ''}</div>
-      ${d.isMonster ? `<div class="stats"><span class="a">ATK ${d.atk != null ? d.atk : '?'}</span> &nbsp; <span class="d">DEF ${d.def != null ? d.def : '?'}</span></div>` : ''}
+      ${d.isMonster ? `<div class="stats"><span class="a">ATK ${d.atk != null ? d.atk : '?'}</span> &nbsp; <span class="d">${d.def == null && d.linkRating ? 'LINK-' + d.linkRating : 'DEF ' + (d.def != null ? d.def : '?')}</span></div>` : ''}
       <div class="txt">${esc(d.desc)}</div>
       ${d.fx && d.fx.length ? '<div class="tags">' + d.fx.map(f => `<span title="${esc(f.label)}">${esc(f.tag)}</span>`).join('') + '</div>' : ''}`;
   }
@@ -636,9 +655,9 @@
     const from = center(e.attacker);
     const tgt = e.target ? center(e.target) : { x: 835, y: e.attackerSide === 'you' ? 20 : 880 };
     SFX.play('attack'); el.style.zIndex = 700;
-    applyPos(el, { x: base.x, y: base.y + (e.attackerSide === 'you' ? 14 : -14), r: base.def ? 90 : 0, s: 1.28 }); await wait(340);
+    applyPos(el, { x: base.x, y: base.y + (e.attackerSide === 'you' ? 14 : -14), r: base.def ? 90 : 0, s: 1.28 * FS }); await wait(340);
     FX.beam(from.x, from.y, tgt.x, tgt.y, '#ffffff', 14);
-    applyPos(el, { x: tgt.x - CW / 2, y: tgt.y - CH / 2 + (e.attackerSide === 'you' ? 34 : -34), r: 0, s: 1.28 }); await wait(190);
+    applyPos(el, { x: tgt.x - CW / 2, y: tgt.y - CH / 2 + (e.attackerSide === 'you' ? 34 : -34), r: 0, s: 1.28 * FS }); await wait(190);
     FX.impact(tgt.x, tgt.y); FX.flash(false); FX.shake(true); SFX.play('hit');
     const tel = e.target && S.els.get(e.target); if (tel) { tel.style.filter = 'brightness(2.4) saturate(.4)'; setTimeout(() => { tel.style.filter = ''; }, 260); }
     await wait(260);
@@ -682,9 +701,10 @@
 
   // ------------------------------------------------------------------ boot
   async function boot() {
-    buildSlots(); wireBan();
     const r = await fetch('/api/duel/state'); if (r.status === 404) { location.href = '/duel'; return; }
     const res = await r.json();
+    MODERN = !!(res.view && res.view.rules === 'modern'); FS = MODERN ? .78 : 1; document.body.classList.toggle('modern', MODERN);
+    buildSlots(); wireBan();
     S.locked = true;
     render(res.view);
     await wait(900);
