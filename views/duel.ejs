@@ -1,7 +1,8 @@
-<!DOCTYPE html><html lang="en"><head><title>Duel</title><%- include('partials/head') %><link rel="stylesheet" href="/static/css/duel.css"></head>
+<!DOCTYPE html><html lang="en"><head><title>Duel</title><%- include('partials/head') %><link rel="stylesheet" href="/static/css/duel.css"><link rel="stylesheet" href="/static/css/md-arena.css"></head>
 <body>
 <div id="viewport"><div id="stage">
   <div id="mat"></div>
+  <div id="glow"></div>
   <div id="slots"></div>
   <div id="stats"></div>
   <div id="cards"></div>
@@ -12,7 +13,7 @@
   <div id="info"><div class="empty">HOVER A CARD</div></div>
 
   <div id="side">
-    <div id="turnBox"><div class="who you" id="turnWho">YOUR TURN</div><small id="turnNo">TURN 1</small>
+    <div id="turnBox"><div class="who you" id="turnWho">YOUR TURN</div><small id="turnNo">TURN 1</small><div id="phaseName"></div>
       <div id="phases"><span data-p="draw">DP</span><span data-p="standby">SP</span><span data-p="m1">M1</span><span data-p="battle">BP</span><span data-p="m2">M2</span><span data-p="end">EP</span></div></div>
     <div id="log"></div>
     <div id="phaseBtns"></div>
@@ -20,6 +21,8 @@
   </div>
 
   <div id="mini"><button id="btnTheme" title="Change colour theme">◈</button><button id="btnSnd" title="Sound">🔊</button><button id="btnSurr" title="Surrender">🏳</button><button id="btnLeave" title="Back to menu">⌂</button></div>
+
+  <div id="rbtns"><button id="rbSnd" title="Sound">&#9835;</button><button id="rbInfo" title="Pin card info">i</button><button id="rbLog" title="Duel log">&#9636;</button></div>
 
   <div id="cmd"></div>
   <div id="hint"></div>
@@ -39,5 +42,6 @@
 <script src="/static/js/sfx.js"></script>
 <script src="/static/js/fx.js"></script>
 <script src="/static/js/duel.js"></script>
+<script src="/static/js/md-arena.js"></script>
 <script>document.getElementById("btnTheme").onclick = () => { const i = THEMES.indexOf(document.documentElement.dataset.theme); setTheme(THEMES[(i + 1) % THEMES.length]); };</script>
 </body></html>

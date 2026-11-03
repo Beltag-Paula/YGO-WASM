@@ -106,7 +106,7 @@
       for (let i = 0; i < 5; i++) {
         for (const kind of ['mon', 'st']) {
           const p = zonePos(side, kind, i), d = document.createElement('div');
-          d.className = 'slot ' + kind; d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.dataset.side = side; d.dataset.kind = kind; d.dataset.i = i;
+          d.className = 'slot ' + kind + (kind === 'st' && (i === 0 || i === 4) ? ' pz ' + (i === 0 ? 'pzl' : 'pzr') : ''); d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.dataset.side = side; d.dataset.kind = kind; d.dataset.i = i;
           if (MODERN) d.style.transform = `scale(${FS})`; d.onclick = () => onSlotClick(side, kind, i); host.appendChild(d);
         }
       }
@@ -132,16 +132,6 @@
       d.className = 'slot emz'; d.style.left = p.x + 'px'; d.style.top = p.y + 'px'; d.style.transform = `scale(${FS})`; host.appendChild(d);
       d.onclick = () => onSlotClick('you', 'mon', 5 + i); // the two Extra Monster Zones (my seq 5 / 6)
       const l = document.createElement('div'); l.className = 'pile-label'; l.style.left = p.x + 'px'; l.style.top = (p.y + CH / 2 + 24 * FS) + 'px'; l.textContent = 'EXTRA MONSTER'; host.appendChild(l);
-    }
-    if (MODERN) {
-      // pendulum zone mounts at the far ends of both spell/trap rows (visual mat tiles; P-zone seq 6/7 wiring comes with a pendulum deck)
-      const pend = (side) => {
-        for (const [i2, huec] of [[0, 'rgba(124, 242, 255, .8)'], [4, 'rgba(255, 90, 130, .8)']]) {
-          const p2 = zonePos(side, 'st', i2), d2 = document.createElement('div');
-          d2.className = 'slot st pend'; d2.dataset.pc = huec; d2.style.left = (p2.x - 86) + 'px'; d2.style.top = p2.y + 'px'; d2.style.transform = `scale(${FS})`; d2.style.setProperty('--pc', huec); d2.dataset.pc = huec; host.appendChild(d2);
-        }
-      };
-      pend('you'); pend('opp');
     }
   }
 
@@ -204,7 +194,7 @@
       el.classList.toggle('down', down); el.classList.toggle('def', def);
       el.classList.toggle('hand', p.zone === 'hand'); el.classList.toggle('opp-card', p.side === 'opp');
       el.classList.toggle('can-act', p.side === 'you' && !!p.c.act && Object.keys(p.c.act).length > 0 && view.canAct && !view.prompt);
-      el.classList.toggle('is-mon', p.zone === 'mon');
+      el.classList.toggle('is-mon', p.zone === 'mon'); el.classList.toggle('in-gy', p.zone === 'gy');
       el.style.zIndex = p.zone === 'hand' ? 100 + p.i : p.zone === 'gy' ? 10 + p.i : 20;
       if (fresh && p.zone === 'hand') { el.style.transitionDelay = (newHand++ * 90) + 'ms'; setTimeout(() => { el.style.transitionDelay = ''; }, 1200); }
       if (p.c.image) { const img = el.querySelector('img'); if (img.dataset.src !== p.c.image) { img.dataset.src = p.c.image; img.src = p.c.image; el.classList.remove('noimg'); }
@@ -242,9 +232,10 @@
       let el = S.stats.get(uid);
       if (!el) { el = document.createElement('div'); el.className = 'stat'; $('stats').appendChild(el); S.stats.set(uid, el); }
       const p = S.pos.get(uid), cx = p.x + CW / 2, halfH = (p.def ? 45 : CH / 2) * FS, cy = p.y + CH / 2;
-      el.style.setProperty('--x', p.x + 'px'); el.style.setProperty('--y', (cy + halfH - 21) + 'px');
+      el.style.setProperty('--x', p.x + 'px'); el.style.setProperty('--y', (cy - halfH - 44) + 'px');
       const cls = (v, b) => v > b ? 'up' : v < b ? 'down' : '';
-      el.innerHTML = d.def == null ? `<span class="${cls(d.atk, d.baseAtk)}">${d.atk}</span>` : `<span class="${cls(d.atk, d.baseAtk)}">${d.atk}</span> / <span class="${cls(d.def, d.baseDef)}">${d.def}</span>`;
+      const lv = d.level && d.frame !== 'link' ? `<small class="lv${d.frame === 'xyz' ? ' xyz' : ''}">${d.frame === 'xyz' ? '\u2606' : '\u2605'} ${d.level}</small>` : '';
+      el.innerHTML = `<b>${d.def == null ? `<span class="${cls(d.atk, d.baseAtk)}">${d.atk}</span>` : `<span class="${cls(d.atk, d.baseAtk)}">${d.atk}</span>/<span class="${cls(d.def, d.baseDef)}">${d.def}</span>`}</b>${lv}`;
     }
     for (const [uid, el] of [...S.stats]) if (!keep.has(uid)) { el.remove(); S.stats.delete(uid); }
   }
@@ -256,7 +247,7 @@
         const el = $(`cnt-${side}-${k}`); if (el.textContent !== String(n)) { el.textContent = n; el.classList.add('bump'); setTimeout(() => el.classList.remove('bump'), 300); }
         const pile = $(`pile-${side}-${k}`); if (k !== 'gy') pile.classList.toggle('empty', n === 0);
       }
-      const b = $(`cnt-${side}-ban`); b.style.display = 'grid'; b.textContent = 'BANISH ' + c.banished; b.classList.toggle('empty', !c.banished);
+      const b = $(`cnt-${side}-ban`); b.style.display = 'grid'; b.textContent = c.banished; b.classList.toggle('empty', !c.banished);
     }
   }
 

@@ -25,13 +25,14 @@ const locInfo = (b, o) => ({ con: b[o], loc: b[o + 1], seq: U(b, o + 2), pos: U(
 
 export class Match {
   constructor(players, opts = {}) { // players[seat] = { name, deckName, avatar, frame, main:[codes], extra:[codes] }
-    this.rules = opts.rules === 'modern' ? 'modern' : 'classic'; this.pl = players; this.turn = 0; this.tp = 0; this.phase = ''; this.over = false; this.winner = null; this.pending = null; this.logs = [];
+    this.summoning = null; this.rules = opts.rules === 'modern' ? 'modern' : 'classic'; this.pl = players; this.turn = 0; this.tp = 0; this.phase = ''; this.over = false; this.winner = null; this.pending = null; this.logs = [];
     this.lp = [8000, 8000]; this.chain = []; this.atk = null; this.auto = null; this.stuck = 0; this.lastSummon = null; this.firstSeat = 0;
     this.seat = [0, 1].map(() => ({ ent: [], nextUid: 1, outbox: [], wake: null, dest: new Map() }));
     this.duel = E.ygo_create((Math.random() * 2 ** 32) >>> 0, (Math.random() * 2 ** 32) >>> 0, 8000, 5, 1, this.rules === 'modern' ? 0x2E800 : 0x28800, 0); // modern: full Master Rule 5 with the two Extra Monster Zones; classic: the traditional board without them
     if (!this.duel) throw new Error('Duel creation failed');
     for (const s of ['constant.lua', 'utility.lua']) loadScript(this.duel, fs.readFileSync(path.join(SCRIPTS, s)), s);
     for (let t = 0; t < 2; t++) { shuffled(players[t].main).forEach((c, i) => E.ygo_new_card(this.duel, c, t, 0, t, 0x01, i, 0x8)); players[t].extra.forEach((c, i) => E.ygo_new_card(this.duel, c, t, 0, t, 0x40, i, 0x8)); }
+    for (const c of opts.setup || (process.env.YGO_TEST_SETUP ? JSON.parse(process.env.YGO_TEST_SETUP) : [])) E.ygo_new_card(this.duel, c.code, c.p, 0, c.p, c.loc, c.seq, c.pos); // test hook: start with cards already on the field
     E.ygo_start(this.duel);
     this.pre = [{ type: 'duelStart' }]; this._log('=== DUEL START ==='); this._run(null);
   }
@@ -67,7 +68,7 @@ export class Match {
 
   _run(resp) { const raw = []; if (resp) this._setResp(resp); let prompt = null;
     for (let i = 0; i < 80; i++) { prompt = this._pump(raw); this.pending = prompt; if (this.over || !prompt) break; const a = this._auto(prompt); if (!a) break; this._setResp(a); }
-    this.auto = null; this._finalize(raw); }
+    this.auto = null; if (!this.pending || !['UNSELECT', 'CARD', 'TRIBUTE'].includes(this.pending.kind)) this.summoning = null; this._finalize(raw); }
 
   // choose answers for engine prompts that the client's flow already answered (tributes, attack target, picked cards) or that need no human input
   _auto(P) { const a = this.auto;
@@ -192,8 +193,11 @@ export class Match {
       case 'ANNOUNCE_CARD': return { type: 'search', prompt: P.retry ? 'That card cannot be declared — try another' : 'Declare a card' };
       case 'CARD': case 'TRIBUTE': case 'UNSELECT': { const cards = P.cards; const onField = cards.length && cards.every(c => c.loc === LOC.MZ || c.loc === LOC.SZ);
         const min = P.kind === 'UNSELECT' ? Math.max(0, P.min - P.picked.length) : P.min, max = P.kind === 'UNSELECT' ? Math.max(1, P.max - P.picked.length) : P.max, optional = !!(P.cancel || P.finish);
-        if (onField) return { type: 'fieldChoice', prompt: 'Select ' + (min === max ? min : min + '–' + max) + ' card' + (max > 1 ? 's' : ''), min, max, optional, uids: cards.map(uidOf) };
-        return { type: 'choice', prompt: 'Select cards', min, max, optional, cards: cards.map(cv) }; }
+        const sm = this.summoning, have = P.kind === 'UNSELECT' ? P.picked.length : 0, more = min === 0 && P.kind === 'UNSELECT' ? ' (or press Confirm)' : '';
+        const what = !sm ? null : ({ synchro: have === 0 ? 'Synchro Summon: select the Tuner' : 'Synchro Summon: select a non-Tuner material', xyz: 'Xyz Summon: select the materials', fusion: 'Fusion Summon: select the materials', link: 'Link Summon: select the materials', ritual: 'Ritual Summon: select the materials' }[sm.frame] || null);
+        const text = (what ? what + more : 'Select ' + (min === max ? min : min + '–' + max) + ' card' + (max > 1 ? 's' : ''));
+        if (onField) return { type: 'fieldChoice', prompt: text, min, max, optional, uids: cards.map(uidOf) };
+        return { type: 'choice', prompt: what ? text : 'Select cards', min, max, optional, cards: cards.map(cv) }; }
       default: return { type: 'option', prompt: 'The engine asked for something this client cannot show yet (' + (P.name || P.kind) + ').', options: [{ id: 'skip', label: 'Skip' }], cards: [] }; } }
   view(v) { const idle = this.pending && this.pending.player === v && (this.pending.kind === 'IDLECMD' || this.pending.kind === 'BATTLECMD'), P = this.pending;
     const you = this._playerView(v, v), opp = this._playerView(v, 1 - v), prompt = this._promptView(v), canAct = !!idle && this.tp === v; const phaseButtons = [];
@@ -221,6 +225,7 @@ export class Match {
       if (type === 'summon' || type === 'set') { const list = type === 'summon' ? P.summon : P.mset, i = list.findIndex(e => sameLoc(e, E0)); if (i < 0) return bad("That monster can't be summoned right now."); return respond(encode(P, { cmd: type === 'summon' ? 'summon' : 'mset', idx: i }), { tributes: (p.tributes || []).map(Number) }); }
       if (type === 'setSpellTrap') { const i = P.sset.findIndex(e => sameLoc(e, E0)); if (i < 0) return bad("That card can't be Set right now."); return respond(encode(P, { cmd: 'sset', idx: i })); }
       if (type === 'position') { const i = P.repos.findIndex(e => sameLoc(e, E0)); if (i < 0) return bad("That monster can't change position."); return respond(encode(P, { cmd: 'repos', idx: i })); }
+      if ((type === 'engine') && E0 && E0.loc === LOC.EXTRA) this.summoning = { frame: frameOf(E0.type || (info(E0.code) || {}).type || 0), name: cname(E0.code) };
       if (type === 'engine' || mapAct.includes(type)) { const cmd = p.cmd || 'activate'; const list = cmd === 'spsummon' ? P.spsummon : P.activate; const hits = list.map((e, i) => [e, i]).filter(([e]) => sameLoc(e, E0)); const h = p.idx != null ? hits.find(([, i]) => i === p.idx) : hits[0]; if (!h) return bad("That effect can't be activated right now."); return respond(encode(P, { cmd, idx: h[1] })); }
       if (type === 'gotoPhase' && p.phase === 'battle') return respond(encode(P, { cmd: 'bp' }));
       if (type === 'endTurn' || type === 'nextPhase') return respond(encode(P, { cmd: 'ep' }));
