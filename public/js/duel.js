@@ -424,7 +424,14 @@
     if (S.ui.mode) { /* slots are display-only */ } else if (!S.locked) { clearUI(); }
   }
   $('stage').addEventListener('click', e => { if (!e.target.closest('.card') && !e.target.closest('#cmd') && !e.target.closest('#picker') && !e.target.closest('#prompt') && !S.locked) { if (S.ui.mode || S.ui.sel) clearUI(); } });
-  addEventListener('keydown', e => { if (e.key === 'Escape') { const had = !!S.ui.mode; clearUI(); closePicker(true); if (had) { shownPrompt = null; refreshUI(); } } });
+  addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    const m = S.ui.mode;
+    if (m && m.type === 'fieldpick' && m.optional) { clearUI(); shownPrompt = null; send('cancelChoice'); return; } // cancel the whole selection (e.g. the summon) on the server
+    if (m && m.type === 'fieldpick') { toast("This selection can't be cancelled."); return; }
+    if (m && m.type === 'zonepick') { toast("The materials are already used: a zone has to be chosen now."); return; }
+    const had = !!m; clearUI(); closePicker(true); if (had) { shownPrompt = null; refreshUI(); }
+  });
 
   function findCardAnywhere(uid) {
     const v = S.view;
@@ -629,7 +636,7 @@
       const r = document.createElement('div'); r.className = 'row';
       const ok = document.createElement('button'); ok.className = 'btn small'; ok.textContent = 'Confirm';
       ok.onclick = () => finishFieldPick(); r.appendChild(ok);
-      if (p.optional) { const c = document.createElement('button'); c.className = 'btn small ghost'; c.textContent = 'Skip'; c.onclick = () => { clearUI(); shownPrompt = null; send('cancelChoice'); }; r.appendChild(c); }
+      if (p.optional) { const c = document.createElement('button'); c.className = 'btn small ghost'; c.textContent = p.cancelLabel || 'Skip'; c.onclick = () => { clearUI(); shownPrompt = null; send('cancelChoice'); }; r.appendChild(c); }
       box.appendChild(r); box.classList.add('on'); box.style.top = '760px'; box.style.left = '520px'; box.style.right = '520px';
     }
   }

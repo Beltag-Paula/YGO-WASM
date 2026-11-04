@@ -25,7 +25,7 @@ const locInfo = (b, o) => ({ con: b[o], loc: b[o + 1], seq: U(b, o + 2), pos: U(
 
 export class Match {
   constructor(players, opts = {}) { // players[seat] = { name, deckName, avatar, frame, main:[codes], extra:[codes] }
-    this.summoning = null; this.rules = opts.rules === 'modern' ? 'modern' : 'classic'; this.pl = players; this.turn = 0; this.tp = 0; this.phase = ''; this.over = false; this.winner = null; this.pending = null; this.logs = [];
+    this.summoning = null; this.undoOK = false; this.rules = opts.rules === 'modern' ? 'modern' : 'classic'; this.pl = players; this.turn = 0; this.tp = 0; this.phase = ''; this.over = false; this.winner = null; this.pending = null; this.logs = [];
     this.lp = [8000, 8000]; this.chain = []; this.atk = null; this.auto = null; this.stuck = 0; this.lastSummon = null; this.firstSeat = 0;
     this.seat = [0, 1].map(() => ({ ent: [], nextUid: 1, outbox: [], wake: null, dest: new Map() }));
     this.duel = E.ygo_create((Math.random() * 2 ** 32) >>> 0, (Math.random() * 2 ** 32) >>> 0, 8000, 5, 1, this.rules === 'modern' ? 0x2E800 : 0x28800, 0); // modern: full Master Rule 5 with the two Extra Monster Zones; classic: the traditional board without them
@@ -59,7 +59,7 @@ export class Match {
         else if (id === 70) { this.chain.push(rec); rec.index = this.chain.length; } else if (id === 73) { rec.index = this.chain.length; this.chain.pop(); } else if (id === 74) { this.chain = []; }
         else if (id === 21 || id === 25) { this._setResp(Buffer.from([0xff])); }
         else if (id === 1) retry = true;
-        else if ((id >= 10 && id <= 26) || (id >= 140 && id <= 143)) { const P = parsePrompt(id, body); prompt = P || { kind: 'UNSUPPORTED', id, name: String(id), player: body[0] }; if (prompt.kind === 'IDLECMD' || prompt.kind === 'BATTLECMD') this.lastSummon = null; }
+        else if ((id >= 10 && id <= 26) || (id >= 140 && id <= 143)) { const P = parsePrompt(id, body); prompt = P || { kind: 'UNSUPPORTED', id, name: String(id), player: body[0] }; if (prompt.kind === 'IDLECMD' || prompt.kind === 'BATTLECMD') this.lastSummon = null; if (prompt.kind === 'UNSELECT') { if (!prompt.picked.length) this.undoOK = !!prompt.cancel; } else this.undoOK = false; }
       }
       if (st === 0) { this.over = true; break; }
       if (st === 1) break; }
@@ -80,6 +80,7 @@ export class Match {
       return Buffer.from([free[0][0] === 0 ? own : 1 - own, free[0][1], free[0][2]]); }
     if (!a || a.seat !== P.player) return null;
     const idxOfUid = u => { const e = this._entByUid(P.player, u); if (!e) return -1; return (P.cards || []).findIndex(c => c.con === e.con && c.loc === e.loc && c.seq === e.seq); };
+    if (P.kind === 'UNSELECT' && a.undo) { if (P.picked.length) return encode(P, { idx: P.cards.length }); a.undo = false; if (P.cancel) return encode(P, { finish: true }); return null; }
     if (P.kind === 'TRIBUTE' && a.tributes) { const sel = []; for (const z of a.tributes) { const i = P.cards.findIndex(c => c.con === P.player && c.loc === LOC.MZ && c.seq === z); if (i >= 0 && !sel.includes(i)) sel.push(i); }
       for (let i = 0; sel.length < P.min && i < P.cards.length; i++) if (!sel.includes(i)) sel.push(i); a.tributes = null;
       return encode(P, { sel: sel.slice(0, P.max) }); }
@@ -192,12 +193,12 @@ export class Match {
       case 'ANNOUNCE_ATTRIB': return { type: 'option', prompt: 'Declare an Attribute', options: Object.keys(ATTR).map(Number).filter(m => Math.floor(P.available / m) % 2 === 1).map(m => ({ id: String(m), label: ATTR[m] })), cards: [] };
       case 'ANNOUNCE_CARD': return { type: 'search', prompt: P.retry ? 'That card cannot be declared — try another' : 'Declare a card' };
       case 'CARD': case 'TRIBUTE': case 'UNSELECT': { const cards = P.cards; const onField = cards.length && cards.every(c => c.loc === LOC.MZ || c.loc === LOC.SZ);
-        const min = P.kind === 'UNSELECT' ? Math.max(0, P.min - P.picked.length) : P.min, max = P.kind === 'UNSELECT' ? Math.max(1, P.max - P.picked.length) : P.max, optional = !!(P.cancel || P.finish);
+        const min = P.kind === 'UNSELECT' ? Math.max(0, P.min - P.picked.length) : P.min, max = P.kind === 'UNSELECT' ? Math.max(1, P.max - P.picked.length) : P.max, optional = !!(P.cancel || P.finish || (P.kind === 'UNSELECT' && this.undoOK)), cancelLabel = this.summoning ? 'Cancel summon' : undefined;
         const sm = this.summoning, have = P.kind === 'UNSELECT' ? P.picked.length : 0, more = min === 0 && P.kind === 'UNSELECT' ? ' (or press Confirm)' : '';
         const what = !sm ? null : ({ synchro: have === 0 ? 'Synchro Summon: select the Tuner' : 'Synchro Summon: select a non-Tuner material', xyz: 'Xyz Summon: select the materials', fusion: 'Fusion Summon: select the materials', link: 'Link Summon: select the materials', ritual: 'Ritual Summon: select the materials' }[sm.frame] || null);
         const text = (what ? what + more : 'Select ' + (min === max ? min : min + '–' + max) + ' card' + (max > 1 ? 's' : ''));
-        if (onField) return { type: 'fieldChoice', prompt: text, min, max, optional, uids: cards.map(uidOf) };
-        return { type: 'choice', prompt: what ? text : 'Select cards', min, max, optional, cards: cards.map(cv) }; }
+        if (onField) return { type: 'fieldChoice', prompt: text, min, max, optional, cancelLabel, uids: cards.map(uidOf) };
+        return { type: 'choice', prompt: what ? text : 'Select cards', min, max, optional, cancelLabel, cards: cards.map(cv) }; }
       default: return { type: 'option', prompt: 'The engine asked for something this client cannot show yet (' + (P.name || P.kind) + ').', options: [{ id: 'skip', label: 'Skip' }], cards: [] }; } }
   view(v) { const idle = this.pending && this.pending.player === v && (this.pending.kind === 'IDLECMD' || this.pending.kind === 'BATTLECMD'), P = this.pending;
     const you = this._playerView(v, v), opp = this._playerView(v, 1 - v), prompt = this._promptView(v), canAct = !!idle && this.tp === v; const phaseButtons = [];
@@ -248,7 +249,10 @@ export class Match {
     if (type === 'announceCard' && P.kind === 'ANNOUNCE_CARD') return respond(encode(P, { code: Number(p.code) }));
     if (type === 'choice' || type === 'cancelChoice') {
       const uids = p.uids || [], idxOf = u => { const e = ent.find(x => x.uid === u); const i = e ? P.cards.findIndex(c => c.con === e.con && c.loc === e.loc && c.seq === e.seq) : -1; return i >= 0 ? i : (String(u).startsWith('p') ? Number(String(u).slice(1)) : -1); };
-      if (type === 'cancelChoice') { if (P.kind === 'UNSELECT') return respond(encode(P, { finish: true })); return respond(encode(P, { cancel: true })); }
+      if (type === 'cancelChoice') {
+        const no = () => bad("This selection can't be cancelled.");
+        if (P.kind === 'UNSELECT') { if (!P.picked.length) return P.cancel ? respond(encode(P, { finish: true })) : no(); if (!this.undoOK) return no(); return respond(encode(P, { idx: P.cards.length }), { undo: true }); } // finish and cancel are the same answer in the engine, so un-pick everything first
+        return P.cancel ? respond(encode(P, { cancel: true })) : no(); }
       if (P.kind === 'CARD' || P.kind === 'TRIBUTE') { const sel = uids.map(idxOf).filter(i => i >= 0); return respond(encode(P, { sel })); }
       if (P.kind === 'UNSELECT') { if (!uids.length) { if (!(P.finish || P.cancel)) return bad('Select ' + (P.min || 1) + ' card(s) to continue (or Skip when the prompt allows it).'); return respond(encode(P, { finish: true })); }
         const idx = idxOf(uids[0]); if (idx < 0) return bad("That card isn't part of this selection prompt — pick one of the highlighted cards."); return respond(encode(P, { idx }), { picks: uids.slice(1) }); } }

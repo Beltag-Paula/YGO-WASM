@@ -18,14 +18,12 @@ html, body { background: #120a04; }
 
 /* ---- the arena floor ---- */
 #mat { left: 350px; top: 46px; width: 940px; height: 712px; border: 0; border-radius: 10px; clip-path: none;
-  background: radial-gradient(ellipse at 50% 46%, rgba(255, 240, 200, .28) 0%, rgba(255, 220, 150, 0) 55%, rgba(60, 28, 4, .5) 100%), url(/static/img/sand.jpg) #d9b574;
+  background: radial-gradient(ellipse at 50% 46%, rgba(225, 236, 255, .26) 0%, rgba(190, 210, 240, 0) 55%, rgba(8, 16, 36, .55) 100%), url(/static/img/floor.jpg) #8d9bb2;
   background-size: 100% 100%, 512px 512px;
   box-shadow: 0 0 0 3px #1f1208, 0 0 0 9px var(--bronze), 0 0 0 12px #3a2410, 0 0 0 14px #1f1208, 0 20px 40px rgba(0, 0, 0, .7); }
 #mat::before { left: 0; right: 0; top: 50%; height: 10px; margin-top: -5px; border: 0; border-radius: 0;
-  background: linear-gradient(180deg, #f3d595 0, #a2712f 30%, #6e4519 58%, #f3d595 100%); box-shadow: 0 2px 5px rgba(60, 30, 5, .6); }
+  background: linear-gradient(180deg, #e3eaf6 0, #8d9bb3 30%, #4a5770 58%, #e3eaf6 100%); box-shadow: 0 2px 5px rgba(10, 20, 40, .6); }
 #mat::after { display: none; }
-#glow { position: absolute; left: 350px; top: 560px; width: 940px; height: 198px; z-index: 1; pointer-events: none; border-radius: 0 0 10px 10px; background: url(/static/img/glow.png) repeat-x 0 0 / 19px 198px; }
-
 /* ---- zones: gold double-diagonal lattice ---- */
 .slot.mon, .slot.st, .slot.emz { width: 124px; height: 136px; margin: 8px 0 0 -10px; border: 3px solid var(--gold); border-radius: 4px; clip-path: none; opacity: 1;
   background:
@@ -47,7 +45,7 @@ html, body { background: #120a04; }
 #pile-you-gy, #pile-opp-gy { width: 108px; height: 108px; margin: 22px 0 0 -2px; border: 0; border-radius: 50%;
   background: radial-gradient(circle at 38% 30%, #b4e0ff 0, #4a95f5 26%, #1a4cc0 60%, #0a2166 100%);
   box-shadow: 0 0 0 6px #b98d3c, 0 0 0 10px #4a3010, 0 0 0 12px #d4a649, 0 0 28px 8px rgba(70, 150, 255, .7), inset 0 -12px 26px rgba(0, 0, 50, .75); }
-[id$="-field"].slot.pile { background: linear-gradient(135deg, #cdb687, #a48a58); box-shadow: inset 0 0 0 4px rgba(120, 85, 30, .55), 0 4px 10px rgba(0, 0, 0, .45); }
+[id$="-field"].slot.pile { background: linear-gradient(135deg, #b9c4d6, #8393ad); box-shadow: inset 0 0 0 4px rgba(120, 85, 30, .55), 0 4px 10px rgba(0, 0, 0, .45); }
 .pile-count { clip-path: none; border-radius: 50%; min-width: 28px; height: 28px; display: grid; place-items: center; font-size: 14px; font-weight: 800; padding: 0 4px;
   color: #fff; background: radial-gradient(circle at 40% 30%, #3b4a7a, #141c3c); border: 2px solid #d4a649; text-shadow: 0 1px 2px #000; box-shadow: 0 2px 6px rgba(0, 0, 0, .6); }
 .pile-count[id$="-ban"] { width: 54px !important; height: 54px; border-radius: 50%; font-size: 20px; border: 0 !important; margin: 0;
